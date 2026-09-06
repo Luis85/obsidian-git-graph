@@ -26,6 +26,9 @@ const mountList = (over: Record<string, unknown> = {}) =>
 			showGraph: true,
 			hasMore: false,
 			dirty: null,
+			dirtyExpanded: false,
+			dirtyFiles: null,
+			dirtyError: null,
 			viewportHeight: 220,
 			...over,
 		},
@@ -58,6 +61,40 @@ describe('CommitList', () => {
 		expect(first?.classes()).toContain('git-graph-row-dirty');
 		expect(first?.text()).toContain('3 changes');
 		expect(w.get('.git-graph-list-spacer').attributes('style')).toContain(`height: ${1001 * 22}px`);
+	});
+
+	it('measures the expanded dirty block, shifting the commits below it, and emits toggleDirty on a click', async () => {
+		class FakeRO {
+			static instances: FakeRO[] = [];
+			observed: Element[] = [];
+			constructor(public cb: ResizeObserverCallback) {
+				FakeRO.instances.push(this);
+			}
+			observe(el: Element): void {
+				this.observed.push(el);
+			}
+			disconnect(): void {}
+		}
+		Object.defineProperty(window, 'ResizeObserver', { value: FakeRO, configurable: true });
+		try {
+			const w = mountList({ dirty: { count: 2, laneCount: 1, headLane: 0, color: 0 }, dirtyExpanded: true, dirtyFiles: [{ path: 'a.md', status: 'M' }] });
+			await nextTick();
+			const host = w.get('.git-graph-dirty-host').element as HTMLElement;
+			const observer = FakeRO.instances.find((inst) => inst.observed.includes(host));
+			expect(observer).toBeDefined();
+
+			Object.defineProperty(host, 'offsetHeight', { value: 60, configurable: true });
+			observer!.cb([], observer as never);
+			await nextTick();
+
+			expect(w.findAll('.git-graph-item')[1]?.attributes('style')).toContain('translateY(82px)');
+			expect(w.get('.git-graph-list-spacer').attributes('style')).toContain(`height: ${22 + 60 + 1000 * 22}px`);
+
+			await w.get('.git-graph-row-dirty').trigger('click');
+			expect(w.emitted('toggleDirty')).toHaveLength(1);
+		} finally {
+			Reflect.deleteProperty(window, 'ResizeObserver');
+		}
 	});
 
 	it('renders details under the expanded row and emits toggle with the hash', async () => {

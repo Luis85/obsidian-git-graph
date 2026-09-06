@@ -111,6 +111,20 @@ describe('GraphRoot', () => {
 		expect(w.find('.git-graph-details').exists()).toBe(true);
 	});
 
+	it('expands the changes row into the working tree files and opens one', async () => {
+		const reader = new FakeReader();
+		reader.commits = linear(1);
+		reader.changed = 2;
+		reader.dirtyFiles = [{ path: 'a.md', status: 'M' }, { path: 'notes/b.md', status: 'A' }];
+		const w = mountRoot({ kind: 'ready', root: 'C:/vault', reader });
+		await flushPromises();
+		await w.get('.git-graph-row-dirty').trigger('click');
+		await flushPromises();
+		expect(w.findAll('.git-graph-dirty-details .git-graph-file')).toHaveLength(2);
+		await w.findAll('.git-graph-dirty-details .git-graph-file-link')[1]?.trigger('click');
+		expect(w.emitted('openFile')).toEqual([['notes/b.md']]);
+	});
+
 	it('re-emits openFile from the expanded commit', async () => {
 		const reader = new FakeReader();
 		reader.commits = linear(1);

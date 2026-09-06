@@ -80,6 +80,37 @@ export function parseNameStatus(stdout: string): ChangedFile[] {
 	return files;
 }
 
+const STATUS_LETTERS = new Set<string>(['A', 'M', 'D', 'R', 'C', 'T']);
+
+/**
+ * The single status letter for one porcelain `XY` pair: the worktree column when it says
+ * something, else the index column. `??` (untracked) reads as an addition, `!!` (ignored) is
+ * dropped, and any other letter git may grow falls back to a modification.
+ */
+function statusOf(x: string, y: string): FileStatus | null {
+	if (x === '!' && y === '!') return null;
+	if (x === '?' && y === '?') return 'A';
+	const letter = y !== ' ' ? y : x;
+	return STATUS_LETTERS.has(letter) ? (letter as FileStatus) : 'M';
+}
+
+/** Parses `git status --porcelain=v1 -z`: a NUL-terminated `XY path` per entry, with a second NUL-terminated old path for renames and copies. */
+export function parseStatus(stdout: string): ChangedFile[] {
+	const tokens = stdout.split(RECORD_SEP).filter((t) => t.length > 0);
+	const files: ChangedFile[] = [];
+	for (let i = 0; i < tokens.length; ) {
+		const entry = tokens[i] ?? '';
+		const x = entry.charAt(0);
+		const y = entry.charAt(1);
+		const oldPath = TWO_PATH.has(x) || TWO_PATH.has(y) ? tokens[i + 1] ?? '' : null;
+		i += oldPath === null ? 1 : 2;
+		const status = statusOf(x, y);
+		if (status === null) continue;
+		files.push(oldPath === null ? { path: entry.slice(3), status } : { path: entry.slice(3), status, oldPath });
+	}
+	return files;
+}
+
 export function countStatus(stdout: string): number {
 	return stdout.split('\n').filter((line) => line.length > 0).length;
 }

@@ -213,6 +213,30 @@ describe('createGraphStore', () => {
 		expect(store.state.error).toBe('fatal: index locked');
 	});
 
+	it('toggleDirty loads the working-tree files, collapses on the second call, and follows the dirty count', async () => {
+		const reader = new FakeReader();
+		reader.commits = linear(1);
+		reader.changed = 2;
+		reader.dirtyFiles = [{ path: 'a.md', status: 'M' }, { path: 'b.md', status: 'A' }];
+		const store = createGraphStore({ reader, settings: settings() });
+		await store.load();
+		await store.toggleDirty();
+		expect(store.state.dirtyExpanded).toBe(true);
+		expect(store.state.dirtyFiles?.map((f) => f.path)).toEqual(['a.md', 'b.md']);
+		reader.dirtyFiles = [{ path: 'a.md', status: 'M' }];
+		reader.changed = 1;
+		await store.refreshStatus();
+		expect(store.state.dirtyFiles).toHaveLength(1);
+		reader.changed = 0;
+		reader.dirtyFiles = [];
+		await store.refreshStatus();
+		expect(store.state.dirtyExpanded).toBe(false);
+		expect(store.state.dirtyFiles).toBeNull();
+		await store.toggleDirty();
+		await store.toggleDirty();
+		expect(store.state.dirtyExpanded).toBe(false);
+	});
+
 	it('ignores results that arrive after dispose', async () => {
 		const reader = new FakeReader();
 		reader.deferLog = true;

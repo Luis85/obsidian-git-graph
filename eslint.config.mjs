@@ -130,10 +130,11 @@ export default defineConfig([
 	{
 		files: ['src/view/store.ts'],
 		rules: {
-			// TODO(quality): createGraphStore has 98 lines (limit 80). `toggleExpand` and
-			// `refreshStatus` were already pulled out as standalone factories
-			// (createExpandToggler/createStatusRefresher), and `applyLoad`/`fetchStatus` were
-			// pulled out at module scope too; what remains inline is
+			// TODO(quality): createGraphStore has 105 lines (limit 80). `toggleExpand`,
+			// `refreshStatus`, `syncDirtyFiles` and `toggleDirty` were already pulled out as
+			// standalone factories (createExpandToggler/createStatusRefresher/createDirtySync/
+			// createDirtyToggler), and `applyLoad`/`fetchStatus`/`collapseDirty` were pulled
+			// out at module scope too; what remains inline is
 			// `visibleRows`/`collapse`/`load`/`loadMore`, which close over shared private
 			// state (state, byHash, generation, disposed) rather than forming one long
 			// procedural function. Pulling those out too would mean threading that shared

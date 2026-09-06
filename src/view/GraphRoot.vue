@@ -138,9 +138,13 @@ function onRefFilter(value: RefFilter): void {
         :show-graph="showGraph"
         :has-more="store.state.hasMore"
         :dirty="showGraph ? dirty : null"
+        :dirty-expanded="store.state.dirtyExpanded"
+        :dirty-files="store.state.dirtyFiles"
+        :dirty-error="store.state.dirtyError"
         @toggle="store.toggleExpand($event)"
         @load-more="store.loadMore()"
         @open-file="emit('openFile', $event)"
+        @toggle-dirty="store.toggleDirty()"
       />
     </template>
   </div>

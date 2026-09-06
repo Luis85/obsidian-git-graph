@@ -1,6 +1,6 @@
 import { computed, shallowReactive, type ComputedRef } from 'vue';
 import { GitError } from '../git/GitError';
-import type { Commit, CommitDetails, GitReader, Ref, RefsSnapshot } from '../git/types';
+import type { ChangedFile, Commit, CommitDetails, GitReader, Ref, RefsSnapshot } from '../git/types';
 import { emptyLayoutState, layoutGraph } from '../graph/layout';
 import type { LayoutState, Row } from '../graph/types';
 import type { GitGraphSettings } from '../settings/types';
@@ -21,6 +21,9 @@ export interface GraphState {
 	headHash: string | null;
 	headBranch: string | null;
 	dirtyCount: number;
+	dirtyExpanded: boolean;
+	dirtyFiles: ChangedFile[] | null;
+	dirtyError: string | null;
 	loadedCount: number;
 	hasMore: boolean;
 	expandedHash: string | null;
@@ -37,6 +40,7 @@ export interface GraphStore {
 	loadMore(): Promise<void>;
 	refreshStatus(): Promise<void>;
 	toggleExpand(hash: string): Promise<void>;
+	toggleDirty(): Promise<void>;
 	setFilter(text: string): void;
 	dispose(): void;
 }
@@ -74,6 +78,50 @@ function createExpandToggler(deps: GraphStoreDeps, state: GraphState, isDisposed
 			if (isDisposed() || state.expandedHash !== hash) return;
 			state.detailsError = errorMessage(e);
 		}
+	};
+}
+
+function collapseDirty(state: GraphState): void {
+	state.dirtyExpanded = false;
+	state.dirtyFiles = null;
+	state.dirtyError = null;
+}
+
+/**
+ * Builds `syncDirtyFiles(gen)`: re-reads the working-tree file list while the changes row is
+ * expanded, and collapses the row once there is nothing left to show. A stale generation (a
+ * newer load, or a dispose) drops the result, like the other fetches here.
+ */
+function createDirtySync(deps: GraphStoreDeps, state: GraphState, currentGeneration: () => number, isDisposed: () => boolean): (gen: number) => Promise<void> {
+	return async function syncDirtyFiles(gen: number): Promise<void> {
+		if (!state.dirtyExpanded) return;
+		if (state.dirtyCount === 0) {
+			collapseDirty(state);
+			return;
+		}
+		try {
+			const files = await deps.reader.statusFiles();
+			if (gen !== currentGeneration() || isDisposed() || !state.dirtyExpanded) return;
+			state.dirtyFiles = files;
+			state.dirtyError = null;
+		} catch (e) {
+			if (gen !== currentGeneration() || isDisposed() || !state.dirtyExpanded) return;
+			state.dirtyError = errorMessage(e);
+		}
+	};
+}
+
+/** Builds `toggleDirty`: expands the changes row and loads its files, or collapses it. */
+function createDirtyToggler(state: GraphState, syncDirtyFiles: (gen: number) => Promise<void>, currentGeneration: () => number): () => Promise<void> {
+	return async function toggleDirty(): Promise<void> {
+		if (state.dirtyExpanded) {
+			collapseDirty(state);
+			return;
+		}
+		state.dirtyExpanded = true;
+		state.dirtyFiles = null;
+		state.dirtyError = null;
+		await syncDirtyFiles(currentGeneration());
 	};
 }
 
@@ -118,7 +166,13 @@ function applyLoad(
 }
 
 /** Builds `refreshStatus`: re-runs `status()` only, generation-guarded like `load()`, never touching `rows`. */
-function createStatusRefresher(deps: GraphStoreDeps, state: GraphState, currentGeneration: () => number, isDisposed: () => boolean): () => Promise<void> {
+function createStatusRefresher(
+	deps: GraphStoreDeps,
+	state: GraphState,
+	currentGeneration: () => number,
+	isDisposed: () => boolean,
+	syncDirtyFiles: (gen: number) => Promise<void>,
+): () => Promise<void> {
 	return async function refreshStatus(): Promise<void> {
 		if (isDisposed() || !deps.settings().showDirtyRow) return;
 		const gen = currentGeneration();
@@ -127,6 +181,7 @@ function createStatusRefresher(deps: GraphStoreDeps, state: GraphState, currentG
 			if (gen !== currentGeneration() || isDisposed()) return;
 			state.dirtyCount = status.changed;
 			state.error = null;
+			await syncDirtyFiles(gen);
 		} catch (e) {
 			if (gen !== currentGeneration() || isDisposed()) return;
 			state.error = errorMessage(e);
@@ -146,6 +201,9 @@ export function createGraphStore(deps: GraphStoreDeps): GraphStore {
 		headHash: null,
 		headBranch: null,
 		dirtyCount: 0,
+		dirtyExpanded: false,
+		dirtyFiles: null,
+		dirtyError: null,
 		loadedCount: 0,
 		hasMore: false,
 		expandedHash: null,
@@ -167,6 +225,8 @@ export function createGraphStore(deps: GraphStoreDeps): GraphStore {
 		});
 	});
 
+	const syncDirtyFiles = createDirtySync(deps, state, () => generation, () => disposed);
+
 	const collapse = (): void => {
 		state.expandedHash = null;
 		state.expandedDetails = null;
@@ -186,6 +246,7 @@ export function createGraphStore(deps: GraphStoreDeps): GraphStore {
 			]);
 			if (gen !== generation || disposed) return;
 			applyLoad(state, byHash, { commits, refs, status, count }, collapse);
+			await syncDirtyFiles(gen);
 		} catch (e) {
 			if (gen !== generation || disposed) return;
 			state.error = errorMessage(e);
@@ -219,8 +280,9 @@ export function createGraphStore(deps: GraphStoreDeps): GraphStore {
 		}
 	}
 
-	const refreshStatus = createStatusRefresher(deps, state, () => generation, () => disposed);
+	const refreshStatus = createStatusRefresher(deps, state, () => generation, () => disposed, syncDirtyFiles);
 	const toggleExpand = createExpandToggler(deps, state, () => disposed, collapse);
+	const toggleDirty = createDirtyToggler(state, syncDirtyFiles, () => generation);
 
 	return {
 		state,
@@ -230,6 +292,7 @@ export function createGraphStore(deps: GraphStoreDeps): GraphStore {
 		loadMore,
 		refreshStatus,
 		toggleExpand,
+		toggleDirty,
 		setFilter(text) {
 			state.filterText = text;
 		},

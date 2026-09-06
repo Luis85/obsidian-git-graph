@@ -7,7 +7,7 @@ changes. Click a commit to see its full message and changed files.
 
 Read-only: the plugin never runs a git command that modifies the repository. Click a file in
 an expanded commit to open it in the editor (files outside the vault or no longer present show
-a notice).
+a notice). Click the changes row to see the uncommitted files; click a file to open it.
 
 ## Requirements
 
@@ -28,7 +28,7 @@ edits (unstaged/staged file changes) show up on the next refresh or git operatio
 | Git executable | `git` | Command or path used to run git. |
 | Refs to show | Auto | Auto: current branch, its upstream, default remote branch. All: every branch and tag. |
 | Commits per page | 200 | Loaded at once; more load as you scroll. |
-| Show working tree changes | on | Row above the newest commit with the uncommitted change count. |
+| Show working tree changes | on | Row above the newest commit with the uncommitted change count; click it for the file list. |
 | Date format | Relative | "3 days ago" or `YYYY-MM-DD HH:mm`. |
 
 ## Development

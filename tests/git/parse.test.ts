@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { countStatus, parseLog, parseNameStatus, parseRefs, parseShow } from '../../src/git/parse';
+import { countStatus, parseLog, parseNameStatus, parseRefs, parseShow, parseStatus } from '../../src/git/parse';
 
 const F = '\x1f';
 const Z = '\0';
@@ -72,5 +72,19 @@ describe('countStatus', () => {
 	it('counts porcelain lines, renames as one', () => {
 		expect(countStatus(' M a.md\n?? b.md\nR  old.md -> new.md\n')).toBe(3);
 		expect(countStatus('')).toBe(0);
+	});
+});
+
+describe('parseStatus', () => {
+	it('maps porcelain v1 -z entries to changed files', () => {
+		const out = ` M${' '}a.md${Z}?? b.md${Z}R  new.md${Z}old.md${Z}D  gone.md${Z}!! ignored.md${Z}MM both.md${Z}`;
+		expect(parseStatus(out)).toEqual([
+			{ path: 'a.md', status: 'M' },
+			{ path: 'b.md', status: 'A' },
+			{ path: 'new.md', status: 'R', oldPath: 'old.md' },
+			{ path: 'gone.md', status: 'D' },
+			{ path: 'both.md', status: 'M' },
+		]);
+		expect(parseStatus('')).toEqual([]);
 	});
 });

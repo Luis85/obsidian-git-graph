@@ -5,7 +5,7 @@
 // (relative dates are the one exception — they are rendered against the wall clock by
 // src/view/dates.ts; pass `dateFormat=absolute` when that matters).
 
-import type { Commit, CommitDetails, FileStatus, GitReader, Ref, RefsSnapshot } from '../src/git/types';
+import type { ChangedFile, Commit, CommitDetails, FileStatus, GitReader, Ref, RefsSnapshot } from '../src/git/types';
 
 export interface Scenario {
 	readonly name: string;
@@ -102,6 +102,8 @@ interface Fixture {
 	readonly headId: string | null;
 	readonly headBranch: string | null;
 	readonly changed: number;
+	/** What `statusFiles()` serves; `changed` stays the count the dirty row shows. */
+	readonly dirtyFiles?: readonly ChangedFile[];
 	readonly detailsDelayMs?: number;
 	/** After the first successful log(), every later log() rejects — the error banner path. */
 	readonly failLogAfterFirst?: boolean;
@@ -153,6 +155,13 @@ function detailsFor(commit: Commit): CommitDetails {
 		files,
 	};
 }
+
+/** The working-tree changes behind the `dirty` scenario's count of 3. */
+const DIRTY_FILES: readonly ChangedFile[] = [
+	{ path: 'src/view/GraphHeader.vue', status: 'M' },
+	{ path: 'src/view/DirtyDetails.vue', status: 'A' },
+	{ path: 'notes/scratch.md', status: 'D' },
+];
 
 // --- scenarios ------------------------------------------------------------------------------
 
@@ -296,7 +305,7 @@ const FIXTURES: Record<string, () => Fixture> = {
 	octopus,
 	branches,
 	long,
-	dirty: () => merge('dirty', 3),
+	dirty: () => ({ ...merge('dirty', 3), dirtyFiles: DIRTY_FILES }),
 	empty,
 	error: () => ({ ...linear('error'), failLogAfterFirst: true }),
 	slow: () => merge('slow', 0, 1500),
@@ -308,7 +317,7 @@ export const SCENARIOS: readonly Scenario[] = [
 	{ name: 'octopus', description: 'A three-parent octopus merge.' },
 	{ name: 'branches', description: 'Four open lanes, remotes and tags, with HEAD below the first row.' },
 	{ name: 'long', description: `${LONG_COUNT} commits, so scrolling to the bottom pages in more.` },
-	{ name: 'dirty', description: 'The merge history plus three uncommitted working tree changes.' },
+	{ name: 'dirty', description: 'The merge history plus three uncommitted working tree changes; the changes row expands.' },
 	{ name: 'empty', description: 'A repository with no commits yet.' },
 	{ name: 'error', description: 'The first load succeeds, every later one fails: banner over kept rows.', refreshAfterLoad: true },
 	{ name: 'slow', description: 'Commit details take 1.5 s to resolve, for the details loading state.' },
@@ -358,6 +367,7 @@ export function createScenarioReader(name: string): GitReader {
 		},
 		refs: () => Promise.resolve(snapshot),
 		status: () => Promise.resolve({ changed: f.changed }),
+		statusFiles: () => Promise.resolve([...(f.dirtyFiles ?? [])]),
 		commitDetails(hash) {
 			const commit = byHash.get(hash);
 			if (commit === undefined) return Promise.reject(new Error(`fatal: bad object ${hash}`));

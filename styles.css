@@ -133,7 +133,7 @@
 .git-graph-row-dirty {
 	color: var(--text-muted);
 	font-style: italic;
-	cursor: default;
+	cursor: pointer;
 }
 .git-graph-subject {
 	flex: 1 1 auto;
@@ -251,6 +251,10 @@
 	border-bottom: 1px solid var(--background-modifier-border);
 	font-size: var(--font-ui-smaller);
 	white-space: normal;
+}
+/* The changes block has no hash/author/message above its file list, so it sits tighter. */
+.git-graph-dirty-details {
+	padding-top: var(--size-4-1);
 }
 .git-graph-details-hash {
 	display: flex;

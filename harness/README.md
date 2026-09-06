@@ -58,7 +58,7 @@ http://localhost:5174/?scenario=dirty&filter=Fix
 | `octopus` | A three-parent octopus merge. |
 | `branches` | Four open lanes, remotes and tags, with HEAD below the first row. |
 | `long` | 600 commits, so scrolling to the bottom pages in more (`log` honours skip/count). |
-| `dirty` | The `merge` history plus three uncommitted working tree changes. |
+| `dirty` | The `merge` history plus three uncommitted working tree changes; the changes row expands into their file list. |
 | `empty` | A repository with no commits yet. |
 | `error` | The first load succeeds, every later one fails: the error banner over kept rows. |
 | `slow` | Commit details take 1.5 s to resolve, for the details loading state. |

@@ -1,12 +1,14 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
-import type { Commit, CommitDetails as Details, Ref } from '../git/types';
+import type { ChangedFile, Commit, CommitDetails as Details, Ref } from '../git/types';
 import type { Row } from '../graph/types';
 import type { DateFormat } from '../settings/types';
 import CommitDetails from './CommitDetails.vue';
 import CommitRow from './CommitRow.vue';
+import DirtyDetails from './DirtyDetails.vue';
 import DirtyRow from './DirtyRow.vue';
 import { ROW_HEIGHT } from './geometry';
+import { createMeasuredHeight } from './measuredHeight';
 
 interface Dirty {
 	count: number;
@@ -27,26 +29,27 @@ const props = defineProps<{
 	showGraph: boolean;
 	hasMore: boolean;
 	dirty: Dirty | null;
+	dirtyExpanded: boolean;
+	dirtyFiles: ChangedFile[] | null;
+	dirtyError: string | null;
 	viewportHeight?: number;
 }>();
-const emit = defineEmits<{ toggle: [hash: string]; loadMore: []; openFile: [path: string] }>();
+const emit = defineEmits<{ toggle: [hash: string]; loadMore: []; openFile: [path: string]; toggleDirty: [] }>();
 
 const OVERSCAN = 5;
 const DETAILS_FALLBACK = 240;
 
 const container = ref<HTMLElement | null>(null);
-// Counts mounts of the details wrapper. A template ref inside `v-for` is an array that Vue
-// mutates in place, so watching it only fires for the first expanded row; the counter plus a
-// post-flush query below re-observes whichever wrapper is currently in the DOM.
-const detailsMounts = ref(0);
 const scrollTop = ref(0);
 const measuredViewport = ref(600);
-const detailsHeight = ref(DETAILS_FALLBACK);
+
+const detailsBox = createMeasuredHeight(container, '.git-graph-details-host', DETAILS_FALLBACK, () => props.expandedHash);
+const dirtyBox = createMeasuredHeight(container, '.git-graph-dirty-host', DETAILS_FALLBACK, () => props.dirtyExpanded);
 
 const viewport = computed(() => props.viewportHeight ?? measuredViewport.value);
-const dirtyOffset = computed(() => (props.dirty === null ? 0 : ROW_HEIGHT));
+const dirtyOffset = computed(() => (props.dirty === null ? 0 : ROW_HEIGHT + (props.dirtyExpanded ? dirtyBox.height.value : 0)));
 const expandedIndex = computed(() => (props.expandedHash === null ? -1 : props.rows.findIndex((r) => r.hash === props.expandedHash)));
-const extra = computed(() => (expandedIndex.value === -1 ? 0 : detailsHeight.value));
+const extra = computed(() => (expandedIndex.value === -1 ? 0 : detailsBox.height.value));
 
 const totalHeight = computed(() => dirtyOffset.value + props.rows.length * ROW_HEIGHT + extra.value);
 
@@ -82,7 +85,6 @@ function onScroll(): void {
 }
 
 let observer: ResizeObserver | null = null;
-let detailsObserver: ResizeObserver | null = null;
 
 onMounted(() => {
 	if (typeof ResizeObserver === 'undefined') return;
@@ -92,34 +94,7 @@ onMounted(() => {
 	if (container.value) observer.observe(container.value);
 });
 
-// Vue re-invokes a function ref on every patch, so only a genuinely new element counts.
-let lastDetailsEl: HTMLElement | null = null;
-function onDetailsRef(el: unknown): void {
-	if (el instanceof HTMLElement && el !== lastDetailsEl) {
-		lastDetailsEl = el;
-		detailsMounts.value++;
-	}
-}
-
-watch(
-	[() => props.expandedHash, detailsMounts],
-	() => {
-		detailsObserver?.disconnect();
-		detailsObserver = null;
-		const el = container.value?.querySelector<HTMLElement>('.git-graph-details-host') ?? null;
-		if (el === null || typeof ResizeObserver === 'undefined') return;
-		detailsObserver = new ResizeObserver(() => {
-			detailsHeight.value = el.offsetHeight || DETAILS_FALLBACK;
-		});
-		detailsObserver.observe(el);
-	},
-	{ flush: 'post' },
-);
-
-onBeforeUnmount(() => {
-	observer?.disconnect();
-	detailsObserver?.disconnect();
-});
+onBeforeUnmount(() => observer?.disconnect());
 
 const headLane = computed(() => props.rows.find((r) => r.hash === props.headHash) ?? null);
 </script>
@@ -144,7 +119,20 @@ const headLane = computed(() => props.rows.find((r) => r.hash === props.headHash
           :lane-count="dirty.laneCount"
           :head-lane="headLane?.lane ?? dirty.headLane"
           :color="headLane?.color ?? dirty.color"
+          :expanded="dirtyExpanded"
+          @toggle="emit('toggleDirty')"
         />
+        <div
+          v-if="dirtyExpanded"
+          :ref="dirtyBox.onRef"
+          class="git-graph-dirty-host"
+        >
+          <DirtyDetails
+            :files="dirtyFiles"
+            :error="dirtyError"
+            @open-file="emit('openFile', $event)"
+          />
+        </div>
       </div>
       <template
         v-for="{ row, index } in visible"
@@ -167,7 +155,7 @@ const headLane = computed(() => props.rows.find((r) => r.hash === props.headHash
           />
           <div
             v-if="row.hash === expandedHash"
-            :ref="onDetailsRef"
+            :ref="detailsBox.onRef"
             class="git-graph-details-host"
           >
             <CommitDetails

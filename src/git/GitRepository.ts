@@ -1,7 +1,7 @@
 import { GitError } from './GitError';
-import { LOG_FORMAT, REF_FORMAT, SHOW_FORMAT, countStatus, parseLog, parseNameStatus, parseRefs, parseShow } from './parse';
+import { LOG_FORMAT, REF_FORMAT, SHOW_FORMAT, countStatus, parseLog, parseNameStatus, parseRefs, parseShow, parseStatus } from './parse';
 import { runGit } from './runGit';
-import type { Commit, CommitDetails, GitReader, RefFilter, RefsSnapshot } from './types';
+import type { ChangedFile, Commit, CommitDetails, GitReader, RefFilter, RefsSnapshot } from './types';
 
 export interface GitRepositoryOptions {
 	gitPath: string;
@@ -89,6 +89,10 @@ export class GitRepository implements GitReader {
 	async status(): Promise<{ changed: number }> {
 		const out = await this.run(['status', '--porcelain=v1', '--untracked-files=all']);
 		return { changed: countStatus(out) };
+	}
+
+	async statusFiles(): Promise<ChangedFile[]> {
+		return parseStatus(await this.run(['status', '--porcelain=v1', '-z', '--untracked-files=all']));
 	}
 
 	async commitDetails(hash: string): Promise<CommitDetails> {

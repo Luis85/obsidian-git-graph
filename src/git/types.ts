@@ -45,5 +45,6 @@ export interface GitReader {
 	log(opts: { skip: number; count: number; refs: RefFilter }): Promise<Commit[]>;
 	refs(): Promise<RefsSnapshot>;
 	status(): Promise<{ changed: number }>;
+	statusFiles(): Promise<ChangedFile[]>;
 	commitDetails(hash: string): Promise<CommitDetails>;
 }

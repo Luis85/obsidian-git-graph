@@ -33,6 +33,20 @@ test('dirty adds a working tree row above the commits', async ({ page }) => {
 	await expect(page.locator('.git-graph-row')).toHaveCount(9);
 });
 
+test('dirty expands the changes row into the working tree files', async ({ page }) => {
+	await open(page, 'scenario=dirty');
+	await expect(page.locator('.git-graph-dirty-details')).toHaveCount(0);
+	await page.locator('.git-graph-row-dirty').click();
+	await expect(page.locator('.git-graph-dirty-details .git-graph-file')).toHaveCount(3);
+});
+
+test('clicking a file in the dirty changes row records it on window.__harness.opened', async ({ page }) => {
+	await open(page, 'scenario=dirty');
+	await page.locator('.git-graph-row-dirty').click();
+	await page.locator('.git-graph-dirty-details .git-graph-file-link').first().click();
+	await expect.poll(() => page.evaluate(() => window.__harness.opened)).toHaveLength(1);
+});
+
 test('branches marks the HEAD ref, and HEAD is not the first row', async ({ page }) => {
 	await open(page, 'scenario=branches');
 	const headRow = page.locator('.git-graph-row-head');

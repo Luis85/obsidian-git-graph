@@ -159,6 +159,11 @@ describe('status', () => {
 		writeFileSync(join(fixture.dir, 'renamed.md'), 'changed\n');
 		expect((await repo.status()).changed).toBe(2);
 	});
+
+	it('lists the changed files with their status', async () => {
+		const files = await repo.statusFiles();
+		expect(files).toEqual(expect.arrayContaining([{ path: 'x.txt', status: 'A' }, { path: 'renamed.md', status: 'M' }]));
+	});
 });
 
 describe('log with a file named HEAD present', () => {

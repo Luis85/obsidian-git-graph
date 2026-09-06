@@ -2,16 +2,29 @@
 import { computed } from 'vue';
 import { LANE_WIDTH, NODE_RADIUS, ROW_HEIGHT } from './geometry';
 
-const props = defineProps<{ count: number; laneCount: number; headLane: number; color: number }>();
+const props = defineProps<{ count: number; laneCount: number; headLane: number; color: number; expanded: boolean }>();
+const emit = defineEmits<{ toggle: [] }>();
 const width = computed(() => Math.max(1, props.laneCount) * LANE_WIDTH);
 const x = computed(() => props.headLane * LANE_WIDTH + LANE_WIDTH / 2);
 const label = computed(() => `${props.count} ${props.count === 1 ? 'change' : 'changes'}`);
+
+function onKey(e: KeyboardEvent): void {
+	if (e.key === 'Enter' || e.key === ' ') {
+		e.preventDefault();
+		emit('toggle');
+	}
+}
 </script>
 
 <template>
   <div
-    class="git-graph-row git-graph-row-dirty"
+    :class="['git-graph-row', 'git-graph-row-dirty', { 'git-graph-row-expanded': expanded }]"
+    role="button"
+    tabindex="0"
+    :aria-expanded="expanded"
     :title="`${label} in the working tree`"
+    @click="emit('toggle')"
+    @keydown="onKey"
   >
     <svg
       class="git-graph-lanes"
