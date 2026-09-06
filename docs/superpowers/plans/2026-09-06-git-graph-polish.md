@@ -436,7 +436,7 @@ git commit -m "chore(docs): accurate typecheck scope, loud harness expand errors
 ```ts
 	it('emits openFile with the current path when a file is clicked or activated with Enter', async () => {
 		const w = mount(CommitDetails, { props: { details, error: null } });
-		const files = w.findAll('button.git-graph-file');
+		const files = w.findAll('.git-graph-file');
 		expect(files).toHaveLength(2);
 		await files[0]!.trigger('click');
 		await files[1]!.trigger('click');
@@ -456,7 +456,7 @@ git commit -m "chore(docs): accurate typecheck scope, loud harness expand errors
 		await w.get('.git-graph-row').trigger('click');
 		reader.resolveDetails();
 		await flushPromises();
-		await w.get('button.git-graph-file').trigger('click');
+		await w.get('.git-graph-file').trigger('click');
 		expect(w.emitted('openFile')).toEqual([['notes/a.md']]);
 	});
 ```
@@ -490,7 +490,7 @@ Mock: `App.vault.files = new Map<string, { path: string }>()`, `getFileByPath(p)
 test('clicking a changed file records it on window.__harness.opened', async ({ page }) => {
 	await open(page, 'scenario=merge');
 	await page.locator('.git-graph-row').first().click();
-	await page.locator('button.git-graph-file').first().click();
+	await page.locator('.git-graph-file').first().click();
 	await expect.poll(() => page.evaluate(() => window.__harness.opened)).toHaveLength(1);
 });
 ```
@@ -498,20 +498,27 @@ test('clicking a changed file records it on window.__harness.opened', async ({ p
 - [ ] **Step 2: Run to verify failure**
 
 Run: `npx vitest run tests/view/CommitDetails.test.ts tests/view/GraphRoot.test.ts tests/plugin/main.test.ts` and `npx playwright test -g "changed file"`.
-Expected: no `button.git-graph-file`, no `openFile` emit, `plugin.openFile` undefined.
+Expected: no `.git-graph-file`, no `openFile` emit, `plugin.openFile` undefined.
 
 - [ ] **Step 3: Implement**
 
-`src/view/CommitDetails.vue` — `defineEmits<{ openFile: [path: string] }>()`; each file becomes
+`src/view/CommitDetails.vue` — `defineEmits<{ openFile: [path: string] }>()`; the file line itself is the click target (no button chrome — the user explicitly does not want buttons):
 ```vue
-				<li v-for="f in details.files" :key="f.path">
-					<button type="button" class="git-graph-file" :title="`Open ${f.path}`" @click.stop="emit('openFile', f.path)">
-						<span :class="['git-graph-file-status', `git-graph-file-status-${f.status}`]">{{ f.status }}</span>
-						<span class="git-graph-file-path">{{ fileLabel(f) }}</span>
-					</button>
+				<li
+					v-for="f in details.files"
+					:key="f.path"
+					class="git-graph-file"
+					role="link"
+					tabindex="0"
+					:title="`Open ${f.path}`"
+					@click.stop="emit('openFile', f.path)"
+					@keydown="onFileKey($event, f.path)"
+				>
+					<span :class="['git-graph-file-status', `git-graph-file-status-${f.status}`]">{{ f.status }}</span>
+					<span class="git-graph-file-path">{{ fileLabel(f) }}</span>
 				</li>
 ```
-(the `<li>` keeps `class="git-graph-file-item"` if a wrapper class is needed for layout; the button carries `git-graph-file` so existing selectors in tests keep working — update the two existing assertions that use `.git-graph-file` if they relied on the `li`).
+with `function onFileKey(e: KeyboardEvent, path: string): void { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); emit('openFile', path); } }`. The Task 5 tests select `.git-graph-file` (the `li`) and trigger `click` and `keydown` with `{ key: 'Enter' }` (expect two emits from one click plus one Enter on the first file: `[['a.md'], ['a.md'], ['new.md']]` — adjust the assertion in Step 1 to click file 0, press Enter on file 0, click file 1). The e2e test clicks `.git-graph-file` instead of `.git-graph-file`.
 
 `src/view/CommitList.vue`: `@open-file="emit('openFile', $event)"` on `CommitDetails`; add `openFile: [path: string]` to its emits. `src/view/GraphRoot.vue`: same re-emit from `CommitList`. `src/view/GitGraphView.ts`: `onOpenFile: (path: string) => host.openFile(path)`; `ViewHost.openFile(path: string): void`.
 
@@ -537,7 +544,7 @@ Expected: no `button.git-graph-file`, no `openFile` emit, `plugin.openFile` unde
 ```
 (`import { isAbsolute, relative, resolve } from 'node:path'`.)
 
-`styles.css`: `.git-graph-file` becomes a full-width, left-aligned, borderless button inheriting font and color, `cursor: pointer`, hover `background: var(--background-modifier-hover)`, `:focus-visible` outline via `var(--background-modifier-border-focus)`; keep `.git-graph-files li { list-style: none }`.
+`styles.css`: `.git-graph-file` stays a plain row but gets `cursor: pointer`, hover `background: var(--background-modifier-hover)` with the path in `var(--text-accent)`, and a `:focus-visible` outline (`outline: 2px solid var(--background-modifier-border-focus)`); no button styling anywhere.
 
 `harness/main.ts`: `opened: string[]` on `window.__harness`; `onOpenFile: (p) => { harness.opened.push(p); }` plus a `.harness-toast` line showing "Would open <path>". `harness/README.md` documents `opened`. `README.md`: "Click a file in an expanded commit to open it in the editor (files outside the vault or no longer present show a notice)."
 
@@ -551,6 +558,107 @@ Expected: green; the class-prefix build test still passes (`git-graph-file*` onl
 ```bash
 git add -A
 git commit -m "feat(view): open a changed file from the expanded commit"
+```
+
+---
+
+### Task 6: Expandable changes row listing the working-tree files (user request)
+
+**Files:**
+- Create: `src/view/FileList.vue` (shared clickable file list, extracted from `CommitDetails.vue`), `src/view/DirtyDetails.vue`, `src/view/measuredHeight.ts` (the details-height measurement from `CommitList.vue`, generalized so two blocks can be measured)
+- Modify: `src/git/types.ts` (`GitReader.statusFiles()`), `src/git/parse.ts` (`parseStatus`), `src/git/GitRepository.ts` (`statusFiles()`), `src/view/store.ts` (`dirtyExpanded`, `dirtyFiles`, `dirtyError`, `toggleDirty()`), `src/view/DirtyRow.vue` (clickable, `expanded` prop, emits `toggle`), `src/view/CommitList.vue` (dirty block + offsets), `src/view/CommitDetails.vue` (uses `FileList`), `src/view/GraphRoot.vue`, `styles.css`, `tests/helpers/fakeReader.ts` (`dirtyFiles`, `statusFiles()`), `harness/fixtures.ts` (`statusFiles()` for `dirty`), `harness/README.md`, `README.md`
+- Test: `tests/git/parse.test.ts`, `tests/git/GitRepository.test.ts`, `tests/view/store.test.ts`, `tests/view/CommitList.test.ts`, `tests/view/CommitDetails.test.ts` (unchanged assertions must still pass through `FileList`), `tests/view/GraphRoot.test.ts`, `harness/harness.spec.ts`
+
+**Interfaces:**
+- Produces: `parseStatus(stdout: string): ChangedFile[]` for `git status --porcelain=v1 -z --untracked-files=all` output (`XY path\0`, renames/copies `XY new\0old\0`): untracked `??` → `A`; otherwise the worktree column `Y` when it is not a space, else the index column `X`; `R`/`C` carry `oldPath`; `!!` (ignored) entries are skipped. `GitReader.statusFiles(): Promise<ChangedFile[]>`; `GitRepository.statusFiles()` runs that command. Store: `state.dirtyExpanded: boolean`, `state.dirtyFiles: ChangedFile[] | null`, `state.dirtyError: string | null`, `toggleDirty(): Promise<void>` (expand → fetch `statusFiles()`, generation-guarded; collapse → clear). `load()`/`refreshStatus()` re-fetch `dirtyFiles` while expanded and collapse when `dirtyCount` becomes 0. `FileList.vue` props `{ files: ChangedFile[] }`, emits `openFile(path)`. `DirtyRow.vue` props gain `expanded: boolean`, emits `toggle`. `DirtyDetails.vue` props `{ files: ChangedFile[] | null; error: string | null }`, emits `openFile`. `CommitList.vue` props gain `dirtyExpanded`, `dirtyFiles`, `dirtyError`; emits `toggleDirty`. `createMeasuredHeight(container: Ref<HTMLElement | null>, selector: string, fallback: number, key: () => unknown): { height: Ref<number>; onRef(el: unknown): void }` in `src/view/measuredHeight.ts` — the post-flush re-query + ResizeObserver pattern now in `CommitList.vue`, keyed on `key()` and on the mount counter fed by `onRef`.
+
+- [ ] **Step 1: Failing tests**
+
+`tests/git/parse.test.ts`:
+```ts
+describe('parseStatus', () => {
+	it('maps porcelain v1 -z entries to changed files', () => {
+		const out = ` M${' '}a.md${Z}?? b.md${Z}R  new.md${Z}old.md${Z}D  gone.md${Z}!! ignored.md${Z}MM both.md${Z}`;
+		expect(parseStatus(out)).toEqual([
+			{ path: 'a.md', status: 'M' },
+			{ path: 'b.md', status: 'A' },
+			{ path: 'new.md', status: 'R', oldPath: 'old.md' },
+			{ path: 'gone.md', status: 'D' },
+			{ path: 'both.md', status: 'M' },
+		]);
+		expect(parseStatus('')).toEqual([]);
+	});
+});
+```
+(`' M'` = worktree modified, `'R  '` = index rename, `'D  '` = index delete, `'MM'` = both.)
+
+`tests/git/GitRepository.test.ts`, after the `status` describe (the fixture then has an untracked `x.txt` and a modified `renamed.md`):
+```ts
+	it('lists the changed files with their status', async () => {
+		const files = await repo.statusFiles();
+		expect(files).toEqual(expect.arrayContaining([{ path: 'x.txt', status: 'A' }, { path: 'renamed.md', status: 'M' }]));
+	});
+```
+
+`tests/view/store.test.ts`:
+```ts
+	it('toggleDirty loads the working-tree files, collapses on the second call, and follows the dirty count', async () => {
+		const reader = new FakeReader();
+		reader.commits = linear(1);
+		reader.changed = 2;
+		reader.dirtyFiles = [{ path: 'a.md', status: 'M' }, { path: 'b.md', status: 'A' }];
+		const store = createGraphStore({ reader, settings: settings() });
+		await store.load();
+		await store.toggleDirty();
+		expect(store.state.dirtyExpanded).toBe(true);
+		expect(store.state.dirtyFiles?.map((f) => f.path)).toEqual(['a.md', 'b.md']);
+		reader.dirtyFiles = [{ path: 'a.md', status: 'M' }];
+		reader.changed = 1;
+		await store.refreshStatus();
+		expect(store.state.dirtyFiles).toHaveLength(1);
+		reader.changed = 0;
+		reader.dirtyFiles = [];
+		await store.refreshStatus();
+		expect(store.state.dirtyExpanded).toBe(false);
+		expect(store.state.dirtyFiles).toBeNull();
+		await store.toggleDirty();
+		await store.toggleDirty();
+		expect(store.state.dirtyExpanded).toBe(false);
+	});
+```
+
+`tests/view/CommitList.test.ts`: with `dirty: { count: 2, … }`, `dirtyExpanded: true`, `dirtyFiles: [{ path: 'a.md', status: 'M' }]` and the fake `ResizeObserver` from the existing tests: the `.git-graph-dirty-host` element is observed; after reporting `offsetHeight` 60 the first commit item's transform is `translateY(82px)` (22 + 60) and the spacer height is `22 + 60 + 1000 * 22`; clicking `.git-graph-row-dirty` emits `toggleDirty`.
+
+`tests/view/GraphRoot.test.ts`: with `reader.changed = 2` and `reader.dirtyFiles` set, clicking `.git-graph-row-dirty` shows `.git-graph-dirty-details .git-graph-file` ×2; clicking one emits `openFile` with its path.
+
+`harness/harness.spec.ts`: `scenario=dirty` → click `.git-graph-row-dirty` → `.git-graph-dirty-details .git-graph-file` has count 3; clicking the first records on `window.__harness.opened`.
+
+- [ ] **Step 2: Run to verify failure**
+
+Run: `npx vitest run tests/git tests/view` and `npx playwright test -g "dirty"`.
+Expected: `parseStatus`/`statusFiles`/`toggleDirty` missing, no `.git-graph-dirty-host`, no `toggleDirty` emit.
+
+- [ ] **Step 3: Implement**
+
+- `parse.ts`: `parseStatus` splits on `\0`, reads `XY` from the first two chars and the path from index 3, consumes a second token for `R`/`C`; status letter = `Y !== ' ' ? Y : X`, `??` → `'A'`, skip `!!`; only letters in `FileStatus` are emitted (anything else → `'M'`).
+- `GitRepository.statusFiles()`: `run(['status', '--porcelain=v1', '-z', '--untracked-files=all'])` → `parseStatus`.
+- `measuredHeight.ts`: move the counter + post-flush watch from `CommitList.vue` into `createMeasuredHeight`; `CommitList.vue` uses two instances (`.git-graph-details-host` keyed on `expandedHash`, `.git-graph-dirty-host` keyed on `dirtyExpanded`); `dirtyOffset = dirty === null ? 0 : ROW_HEIGHT + (dirtyExpanded ? dirtyHeight : 0)` so `offsetOf`/`indexAt`/`totalHeight` need no other change; the dirty item renders `DirtyRow` then, when expanded, `<div class="git-graph-dirty-host" :ref="dirtyRef"><DirtyDetails …/></div>`.
+- `FileList.vue`: the `<ul class="git-graph-files">` with the clickable `li.git-graph-file` rows from Task 5 and the "No file changes" empty state; `CommitDetails.vue` and `DirtyDetails.vue` render it. `DirtyDetails.vue` root `div.git-graph-details.git-graph-dirty-details` shows "Loading changes…" while `files` is null and no error, the error text, else the list.
+- `DirtyRow.vue`: `role="button"`, `tabindex="0"`, `:aria-expanded`, `@click` and Enter/Space → `emit('toggle')`; `git-graph-row-expanded` class when expanded; `cursor: pointer` in `styles.css` (replace the `cursor: default` on `.git-graph-row-dirty`).
+- Store: `toggleDirty`, and `load()`/`refreshStatus()` call a shared `syncDirtyFiles(gen)` that fetches `statusFiles()` when expanded and collapses when `dirtyCount === 0`.
+- GraphRoot: pass the three props, `@toggle-dirty="store.toggleDirty()"`; `harness/fixtures.ts`: `statusFiles()` returns 3 deterministic files for `dirty`, `[]` otherwise; `FakeReader.statusFiles()` returns `this.dirtyFiles`.
+- README: "Click the changes row to see the uncommitted files; click a file to open it."
+
+- [ ] **Step 4: Run tests and gates**
+
+Run: `npx vitest run`, `npm run check`, `npm run test:e2e`, `npm run screenshot -- --scenario=dirty`.
+Expected: green; `screenshots/dirty-*.png` show the collapsed row (expansion is exercised by the e2e test).
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add -A
+git commit -m "feat(view): expandable changes row listing the working-tree files"
 ```
 
 ---
