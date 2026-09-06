@@ -61,6 +61,11 @@ type-checks all of them; `build` and `test-build` call it instead of inlining `v
 
 Lane colors can be changed by a CSS snippet overriding `--git-graph-lane-0` … `--git-graph-lane-7`.
 
+CI runs `check`'s gates plus an `npm audit` job on every push to `main` and every pull
+request; the release workflow refuses to publish a commit that job has not passed. See
+[RELEASING.md](RELEASING.md) for cutting a release and [CHANGELOG.md](CHANGELOG.md) for what
+each one shipped.
+
 ### Browser harness
 
 `harness/` is a standalone Vite app that mounts the real view tree against in-memory fixture
