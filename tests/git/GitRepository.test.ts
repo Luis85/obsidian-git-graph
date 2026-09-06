@@ -1,4 +1,5 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
+import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -68,11 +69,49 @@ describe('log', () => {
 	it('returns [] for a repository with no commits', async () => {
 		const empty = mkdtempSync(join(tmpdir(), 'git-graph-empty-'));
 		try {
-			const { execFileSync } = await import('node:child_process');
 			execFileSync('git', ['init', '-q', '-b', 'main'], { cwd: empty });
-			expect(await new GitRepository({ gitPath: 'git', cwd: empty }).log({ skip: 0, count: 10, refs: 'auto' })).toEqual([]);
+			const emptyRepo = new GitRepository({ gitPath: 'git', cwd: empty });
+			expect(await emptyRepo.log({ skip: 0, count: 10, refs: 'auto' })).toEqual([]);
+			expect(await emptyRepo.log({ skip: 0, count: 10, refs: 'all' })).toEqual([]);
 		} finally {
 			rmSync(empty, { recursive: true, force: true });
+		}
+	});
+
+	it('refs=all still returns real commits when HEAD is an unborn/orphan branch', async () => {
+		const dir = realpathSync.native(mkdtempSync(join(tmpdir(), 'git-graph-orphan-')));
+		try {
+			const git = (...args: string[]): string =>
+				execFileSync('git', args, {
+					cwd: dir,
+					encoding: 'utf8',
+					env: {
+						...process.env,
+						GIT_AUTHOR_NAME: 'Ann Author',
+						GIT_AUTHOR_EMAIL: 'ann@example.com',
+						GIT_COMMITTER_NAME: 'Cara Committer',
+						GIT_COMMITTER_EMAIL: 'cara@example.com',
+						GIT_AUTHOR_DATE: '2026-09-01T10:00:00+02:00',
+						GIT_COMMITTER_DATE: '2026-09-01T10:00:00+02:00',
+					},
+				}).trim();
+
+			git('init', '-q', '-b', 'main');
+			writeFileSync(join(dir, 'note.md'), '# note\n');
+			git('add', '.');
+			git('commit', '-q', '-m', 'Root commit');
+			const root = git('rev-parse', 'HEAD');
+
+			git('checkout', '-q', '--orphan', 'other');
+
+			const orphanRepo = new GitRepository({ gitPath: 'git', cwd: dir });
+			const all = await orphanRepo.log({ skip: 0, count: 10, refs: 'all' });
+			expect(all.map((c) => c.hash)).toEqual([root]);
+
+			const auto = await orphanRepo.log({ skip: 0, count: 10, refs: 'auto' });
+			expect(auto).toEqual([]);
+		} finally {
+			rmSync(dir, { recursive: true, force: true });
 		}
 	});
 });

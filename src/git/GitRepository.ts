@@ -47,10 +47,19 @@ export class GitRepository implements GitReader {
 		return parseLog(out);
 	}
 
-	/** Null when HEAD has no commits yet. */
+	/**
+	 * Null when there is nothing to list: for 'auto' that means HEAD has no commits yet (an
+	 * unborn branch); `git log HEAD` would fail in that case, so the precheck below short-circuits
+	 * before ever running it. For 'all' the precheck is on HEAD's existence specifically, but
+	 * `git log --all` doesn't need HEAD to resolve — it only needs *some* ref to exist — so 'all'
+	 * uses its own check (any ref at all) instead of piggybacking on the HEAD one.
+	 */
 	private async refSelection(filter: RefFilter): Promise<string[] | null> {
+		if (filter === 'all') {
+			const anyRef = await this.tryRun(['for-each-ref', '--count=1', '--format=%(objectname)']);
+			return anyRef !== null && anyRef.trim().length > 0 ? ['--all'] : null;
+		}
 		if ((await this.tryRun(['rev-parse', '--verify', '-q', 'HEAD'])) === null) return null;
-		if (filter === 'all') return ['--all'];
 		const selection = ['HEAD'];
 		const upstream = await this.tryRun(['rev-parse', '--symbolic-full-name', '@{upstream}']);
 		if (upstream !== null && upstream.trim().length > 0) selection.push(upstream.trim());
