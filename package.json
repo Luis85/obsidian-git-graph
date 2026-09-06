@@ -1,0 +1,39 @@
+{
+  "name": "obsidian-git-graph",
+  "version": "0.1.0",
+  "description": "VS Code's source control graph as an Obsidian side pane.",
+  "type": "module",
+  "scripts": {
+    "dev": "vite build --watch --mode development",
+    "build": "vue-tsc -noEmit && vite build",
+    "test-build": "vue-tsc -noEmit && vite build --mode development && node scripts/test-build.mjs",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "lint": "eslint . --max-warnings 0",
+    "check": "npm run build && npm run lint && npm run test"
+  },
+  "keywords": ["obsidian", "obsidian-plugin", "git", "graph"],
+  "author": "Luis85",
+  "license": "MIT",
+  "engines": { "node": ">=22" },
+  "devDependencies": {
+    "@types/node": "^22.20.1",
+    "@typescript-eslint/parser": "^8.68.0",
+    "@vitejs/plugin-vue": "^6.0.8",
+    "@vue/test-utils": "^2.4.11",
+    "eslint": "^10.9.1",
+    "eslint-plugin-obsidianmd": "^0.4.2",
+    "eslint-plugin-vue": "^10.10.0",
+    "jsdom": "^30.0.1",
+    "obsidian": "1.13.0",
+    "typescript": "~6.0.3",
+    "typescript-eslint": "^8.67.0",
+    "vite": "^8.2.2",
+    "vitest": "^4.1.10",
+    "vue-eslint-parser": "^10.4.1",
+    "vue-tsc": "^3.3.11"
+  },
+  "dependencies": {
+    "vue": "^3.5.41"
+  }
+}
