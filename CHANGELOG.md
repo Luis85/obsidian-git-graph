@@ -36,3 +36,5 @@ See [RELEASING.md](RELEASING.md) for how this file is kept in step with a releas
   re-reads on demand.
 - Settings for the git executable, which refs to show, commits per page, whether to show
   the working-tree changes row, and relative or absolute dates.
+- Deleted files in a file list are shown struck through and cannot be opened; relative
+  dates count months and years on the calendar rather than in 30-day blocks.
