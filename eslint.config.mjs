@@ -8,7 +8,9 @@ import vueParser from 'vue-eslint-parser';
 import oxlint from 'eslint-plugin-oxlint';
 
 const SRC = ['src/**/*.ts', 'src/**/*.vue'];
-const TESTS = ['tests/**/*.ts'];
+// The harness is application-shaped but not plugin code: it lints on the same tier as
+// tests and root tooling, never with obsidianmd's plugin-guideline rules.
+const TESTS = ['tests/**/*.ts', 'harness/**/*.ts'];
 const tsconfigRootDir = fileURLToPath(new URL('.', import.meta.url));
 // obsidianmd's recommended config pulls in typescript-eslint's type-checked rules for
 // src/**/*.ts, which need type information; point the parser at this project's tsconfig.
@@ -59,7 +61,7 @@ function scopeObsidianConfigEntry(c) {
 }
 
 export default defineConfig([
-	{ ignores: ['node_modules/**', 'dist/**', '.obsidian/**', 'coverage/**', 'docs/**'] },
+	{ ignores: ['node_modules/**', 'dist/**', '.obsidian/**', 'coverage/**', 'docs/**', 'harness-dist/**', 'screenshots/**', 'playwright-report/**', 'test-results/**'] },
 	...obsidianmd.configs.recommended.map(scopeObsidianConfigEntry),
 	...pluginVue.configs['flat/recommended'].map((c) => ({ ...c, files: ['src/**/*.vue'] })),
 	{
@@ -106,7 +108,7 @@ export default defineConfig([
 		},
 	},
 	{
-		files: ['tests/**/*.ts', 'scripts/**/*.mjs', '*.ts', '*.mjs'],
+		files: [...TESTS, 'scripts/**/*.mjs', '*.ts', '*.mjs'],
 		rules: {
 			'max-lines': ['error', { max: 500, skipBlankLines: true, skipComments: true }],
 			complexity: ['error', 15],

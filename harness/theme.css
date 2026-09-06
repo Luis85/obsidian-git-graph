@@ -1,0 +1,195 @@
+/* An approximation of Obsidian's theme surface, for the browser harness only.
+   Obsidian is not loaded here, so styles.css would have no variables to read. These values are
+   close to Obsidian's default light and dark themes, but they are a stand-in: treat a harness
+   screenshot as "the layout and states are right", not "these are the exact plugin colors".
+   Harness chrome (the toolbar and the frame) is prefixed `harness-` so it can never collide
+   with the plugin's `git-graph-` classes. */
+
+:root,
+body {
+	--background-primary: #ffffff;
+	--background-secondary: #f2f3f5;
+	--background-modifier-border: #dcddde;
+	--background-modifier-hover: rgba(0, 0, 0, 0.05);
+	--background-modifier-error: #e93147;
+	--background-modifier-form-field: #ffffff;
+
+	--text-normal: #222222;
+	--text-muted: #5c5c5c;
+	--text-faint: #999999;
+	--text-on-accent: #ffffff;
+	--text-error: #e93147;
+
+	--interactive-accent: #7b6cf6;
+	--interactive-accent-hover: #8a7cf8;
+
+	--color-red: #e93147;
+	--color-orange: #ec7500;
+	--color-yellow: #e0ac00;
+	--color-green: #08b94e;
+	--color-cyan: #00bfbc;
+	--color-blue: #086ddd;
+	--color-purple: #7852ee;
+	--color-pink: #d53984;
+
+	--size-2-1: 2px;
+	--size-2-2: 4px;
+	--size-2-3: 6px;
+	--size-4-1: 4px;
+	--size-4-2: 8px;
+	--size-4-3: 12px;
+	--size-4-4: 16px;
+
+	--font-ui-smaller: 12px;
+	--font-ui-small: 13px;
+	--font-normal: 400;
+	--font-semibold: 600;
+	--font-bold: 700;
+	--font-text: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+	--font-monospace: 'Cascadia Mono', 'Source Code Pro', Menlo, Consolas, monospace;
+
+	--radius-s: 4px;
+}
+
+body.theme-dark {
+	--background-primary: #1e1e1e;
+	--background-secondary: #161616;
+	--background-modifier-border: #2f2f2f;
+	--background-modifier-hover: rgba(255, 255, 255, 0.075);
+	--background-modifier-error: #b3373c;
+	--background-modifier-form-field: #1a1a1a;
+
+	--text-normal: #dadada;
+	--text-muted: #b3b3b3;
+	--text-faint: #7a7a7a;
+	--text-on-accent: #ffffff;
+	--text-error: #fb464c;
+
+	--interactive-accent: #8f7ef8;
+	--interactive-accent-hover: #a08ff9;
+
+	--color-red: #fb464c;
+	--color-orange: #e9973f;
+	--color-yellow: #e0de71;
+	--color-green: #44cf6e;
+	--color-cyan: #53dfdd;
+	--color-blue: #4f9cf9;
+	--color-purple: #a882ff;
+	--color-pink: #fa99cd;
+}
+
+body {
+	margin: 0;
+	padding: var(--size-4-4);
+	background: var(--background-secondary);
+	color: var(--text-normal);
+	font-family: var(--font-text);
+	font-size: var(--font-ui-small);
+}
+
+/* Obsidian control base styles that styles.css leans on. */
+.clickable-icon {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	padding: var(--size-2-2);
+	border: none;
+	border-radius: var(--radius-s);
+	background: transparent;
+	box-shadow: none;
+	color: var(--text-muted);
+	cursor: pointer;
+}
+.clickable-icon:hover:not(:disabled) {
+	background: var(--background-modifier-hover);
+	color: var(--text-normal);
+}
+.clickable-icon:disabled {
+	opacity: 0.5;
+	cursor: default;
+}
+
+button.mod-cta {
+	padding: var(--size-2-2) var(--size-4-3);
+	border: none;
+	border-radius: var(--radius-s);
+	background: var(--interactive-accent);
+	color: var(--text-on-accent);
+	font-family: inherit;
+	font-size: var(--font-ui-smaller);
+	font-weight: var(--font-semibold);
+	cursor: pointer;
+}
+button.mod-cta:hover {
+	background: var(--interactive-accent-hover);
+}
+
+select.dropdown,
+input[type='search'],
+input[type='text'] {
+	padding: var(--size-2-2) var(--size-2-3);
+	border: 1px solid var(--background-modifier-border);
+	border-radius: var(--radius-s);
+	background: var(--background-modifier-form-field);
+	color: var(--text-normal);
+	font-family: inherit;
+	font-size: var(--font-ui-smaller);
+}
+input[type='search']::placeholder {
+	color: var(--text-faint);
+}
+
+/* Harness chrome. */
+.harness-toolbar {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: var(--size-4-3);
+	margin-bottom: var(--size-4-3);
+	font-size: var(--font-ui-smaller);
+	color: var(--text-muted);
+}
+.harness-field {
+	display: inline-flex;
+	align-items: center;
+	gap: var(--size-4-1);
+}
+.harness-field select {
+	padding: var(--size-2-1) var(--size-2-2);
+	border: 1px solid var(--background-modifier-border);
+	border-radius: var(--radius-s);
+	background: var(--background-modifier-form-field);
+	color: var(--text-normal);
+	font-family: inherit;
+	font-size: var(--font-ui-smaller);
+}
+.harness-toolbar button {
+	padding: var(--size-2-1) var(--size-4-2);
+	border: 1px solid var(--background-modifier-border);
+	border-radius: var(--radius-s);
+	background: var(--background-primary);
+	color: var(--text-normal);
+	font-family: inherit;
+	font-size: var(--font-ui-smaller);
+	cursor: pointer;
+}
+.harness-note {
+	flex: 1 1 12em;
+	min-width: 0;
+	color: var(--text-faint);
+}
+
+/* The pane itself: a bounded box, like Obsidian's right sidebar. */
+.harness-frame {
+	display: flex;
+	overflow: hidden;
+	border: 1px solid var(--background-modifier-border);
+	border-radius: var(--radius-s);
+	background: var(--background-primary);
+	color: var(--text-normal);
+	font-family: var(--font-text);
+}
+.harness-frame > * {
+	flex: 1 1 auto;
+	min-width: 0;
+}

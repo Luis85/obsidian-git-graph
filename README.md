@@ -55,3 +55,15 @@ and `tests/**`, so `npm run typecheck` (`vue-tsc --noEmit`) type-checks both; `b
 | Test build | `npm run test-build` | `typecheck`, the dev-mode vite build, or `scripts/test-build.mjs` (installs into `.obsidian/plugins/git-graph/`) failing. |
 
 Lane colors can be changed by a CSS snippet overriding `--git-graph-lane-0` … `--git-graph-lane-7`.
+
+### Browser harness
+
+`harness/` is a standalone Vite app that mounts the real view tree against in-memory fixture
+repositories, so the pane can be opened, driven and screenshotted in Chromium without
+installing the plugin into Obsidian — useful for AI agents and for reviewing UI changes.
+`npm run harness` serves it on <http://localhost:5174>, `npm run screenshot` writes a PNG per
+scenario and theme into `screenshots/`, and `npm run test:e2e` runs the Playwright smoke tests
+(run `npm run harness:install` once first to download Chromium). These are deliberately not
+part of `npm run check`; run `test:e2e` before merging a change to `src/view/**` or
+`styles.css`. See [`harness/README.md`](harness/README.md) for the scenarios, the URL
+parameters and the `window.__harness` API.

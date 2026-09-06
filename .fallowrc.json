@@ -7,6 +7,26 @@
   // vite/vitest configs and eslint.config.mjs — verified with `npx fallow list` and a
   // clean `npx fallow dead-code` run. These `entry` globs are listed explicitly anyway,
   // per this project's convention of not relying on undocumented auto-detection.
-  "entry": ["src/main.ts", "tests/**/*.test.ts", "scripts/test-build.mjs"],
-  "ignorePatterns": ["dist/**", "node_modules/**", ".obsidian/**", ".superpowers/**", "docs/**", "coverage/**"]
+  // The harness entries: main.ts is loaded by harness/index.html, obsidian-stub.ts only ever
+  // reached through vite.harness.config.ts's resolve alias (fallow cannot follow that), and
+  // harness.spec.ts / playwright.config.ts / screenshot.mjs are run by npm scripts.
+  "entry": [
+    "src/main.ts",
+    "tests/**/*.test.ts",
+    "scripts/test-build.mjs",
+    "scripts/screenshot.mjs",
+    "harness/main.ts",
+    "harness/obsidian-stub.ts",
+    "harness/harness.spec.ts",
+    "playwright.config.ts",
+    "vite.harness.config.ts"
+  ],
+  // `lucide` is imported only by harness/obsidian-stub.ts, which has to be a manual entry
+  // (nothing imports it — vite.harness.config.ts resolves it through an alias). fallow treats
+  // every manual entry as production code and so reported `lucide` under
+  // dev-dependencies-in-production; the harness never ships, and `entry` has no dev/runtime
+  // role to say so, so the package is exempted by name instead. The cost is that fallow will
+  // no longer notice if the harness stops importing lucide at all.
+  "ignoreDependencies": ["lucide"],
+  "ignorePatterns": ["dist/**", "node_modules/**", ".obsidian/**", ".superpowers/**", "docs/**", "coverage/**", "harness-dist/**", "screenshots/**", "playwright-report/**", "test-results/**"]
 }

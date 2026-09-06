@@ -5,8 +5,18 @@
     "correctness": "error",
     "suspicious": "error"
   },
-  "ignorePatterns": ["dist/**", "node_modules/**", ".obsidian/**", ".superpowers/**", "docs/**", "coverage/**"],
+  "ignorePatterns": ["dist/**", "node_modules/**", ".obsidian/**", ".superpowers/**", "docs/**", "coverage/**", "harness-dist/**", "screenshots/**", "playwright-report/**", "test-results/**"],
   "overrides": [
+    {
+      "files": ["harness/**/*.ts", "scripts/screenshot.mjs"],
+      "rules": {
+        // `window.__harness` is the agreed name for the harness's browser-side API. The
+        // double underscore marks it as an automation hook rather than part of the page's
+        // own surface, the same convention Playwright/Vue devtools use; it never appears
+        // in `src/`.
+        "no-underscore-dangle": ["error", { "allow": ["__harness"] }]
+      }
+    },
     {
       "files": ["src/util/emitter.ts"],
       "rules": {
