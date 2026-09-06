@@ -29,6 +29,13 @@ describe('GitGraphPlugin', () => {
 		expect(plugin.ribbon).toHaveLength(1);
 		expect(plugin.commands.map((c) => c.id)).toEqual(['open', 'refresh']);
 		expect(plugin.settingTabs).toHaveLength(1);
+		// The mock's onLayoutReady invokes its callback synchronously, so onload() already
+		// parked a floating initRepo() on resolveRepoRoot. Awaiting a second initRepo() makes
+		// generation 1 bail out (so it never touches repoState after this test returns), and
+		// onunload() disposes the watcher that generation 2 installs — otherwise a live
+		// fs.watch on fixture.dir/.git outlives the test and races afterAll's rmSync.
+		await plugin.initRepo();
+		plugin.onunload();
 	});
 
 	it('resolves the repository on load and exposes a ready state', async () => {
@@ -46,10 +53,12 @@ describe('GitGraphPlugin', () => {
 			await plugin.onload();
 			await plugin.initRepo();
 			expect(plugin.repoState.value.kind).toBe('none');
+			plugin.onunload();
 			const broken = makePlugin(fixture.dir, { gitPath: 'no-such-git' });
 			await broken.onload();
 			await broken.initRepo();
 			expect(broken.repoState.value).toEqual({ kind: 'no-git', gitPath: 'no-such-git' });
+			broken.onunload();
 		} finally {
 			rmSync(outside, { recursive: true, force: true });
 		}
