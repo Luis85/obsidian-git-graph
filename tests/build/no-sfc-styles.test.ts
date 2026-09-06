@@ -9,7 +9,7 @@ function vueFiles(dir: string): string[] {
 }
 
 describe('single-file components', () => {
-	it('carry no <style> block; all CSS lives in styles.css', () => {
+	it('carry no <style> block; all CSS lives in styles/', () => {
 		for (const file of vueFiles('src')) {
 			expect(readFileSync(file, 'utf8'), file).not.toMatch(/<style[\s>]/);
 		}

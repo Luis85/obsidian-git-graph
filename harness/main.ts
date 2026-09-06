@@ -8,7 +8,7 @@ import { createEmitter } from '../src/util/emitter';
 import GraphRoot from '../src/view/GraphRoot.vue';
 import type { RepoState } from '../src/view/repoState';
 import { createScenarioReader, findScenario, scenarioCommits, SCENARIOS, type Scenario } from './fixtures';
-import '../styles.css';
+import '../styles/index.css';
 import './theme.css';
 
 interface HarnessApi {

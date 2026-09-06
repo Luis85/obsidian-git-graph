@@ -1,7 +1,7 @@
 # Browser harness
 
 A standalone Vite app that mounts the plugin's real view tree — `src/view/GraphRoot.vue`, the
-whole component tree under it, and the repo-root `styles.css` — in a normal browser, against
+whole component tree under it, and the real stylesheet — in a normal browser, against
 in-memory fixture repositories. It exists so an agent (or a human) can look at the pane, drive
 it, and screenshot it **without installing the plugin into Obsidian**.
 
@@ -21,7 +21,7 @@ npm run test:e2e           # Playwright smoke tests (starts the dev server itsel
 
 `npm run check` does **not** run `test:e2e` or `screenshot`: both need a ~200 MB Chromium
 download. Run `harness:install` once, then `npm run test:e2e` before merging any change to
-`src/view/**` or `styles.css`.
+`src/view/**` or `styles/**`.
 
 ## URL parameters
 
@@ -130,7 +130,7 @@ some other server, for example a `harness:build` preview.
 ## Caveats
 
 - **The theme is an approximation.** Obsidian is not running, so `harness/theme.css` supplies
-  stand-in values for the CSS variables `styles.css` reads (`--background-*`, `--text-*`,
+  stand-in values for the CSS variables the plugin's own styles read (`--background-*`, `--text-*`,
   `--color-*`, `--size-*`, `--font-*`, `--radius-s`) plus base looks for `.clickable-icon`,
   `.mod-cta` and `.dropdown`. They are close to Obsidian's defaults, but a harness screenshot
   proves the layout and the states, not the exact colors a user will see.

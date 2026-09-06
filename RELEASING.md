@@ -32,10 +32,12 @@ own refusals. `manifest.json`, `package.json` and `versions.json` agreeing is ch
 earlier still — by `tests/release/versionFiles.test.ts`, so it fails on the pull request
 rather than at publish time.
 
-Only `main.js` is built: `npm run build` typechecks with `vue-tsc` and has Vite write the
-minified CommonJS bundle to `dist/main.js`, which uploads under its basename. `manifest.json`
-and `styles.css` are committed source files at the repository root and are published as they
-are. Each asset also gets a signed provenance attestation, verifiable with
+Two of the three assets are built: `npm run build` typechecks with `vue-tsc`, has Vite write
+the minified CommonJS bundle to `dist/main.js`, and has the `git-graph-styles` Vite plugin
+assemble `styles/` into `dist/styles.css`. Both upload under their basename, so the release
+carries `main.js` and `styles.css`. `manifest.json` is the only committed source file among
+them. The repository root holds no stylesheet at all — edit the partial in `styles/`, never a
+build output. Each asset also gets a signed provenance attestation, verifiable with
 `gh attestation verify <file> --repo Luis85/obsidian-git-graph`.
 
 **The release body is required to carry this version's `CHANGELOG.md` entry, and that is

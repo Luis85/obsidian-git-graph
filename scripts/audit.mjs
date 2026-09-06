@@ -1,25 +1,23 @@
 import { spawnSync } from 'node:child_process';
 
 /**
- * `npm audit --omit=dev --audit-level=critical`, run with one inherited config stripped.
+ * `npm audit --omit=dev --audit-level=critical`, run with one inherited config key removed.
  *
- * The plain command works. Running it *through* `npm run` does not: npm exports every
- * resolved config key into the script's environment as `npm_config_*`, so a
- * `allow-scripts=<pkg>` line in the user's own `~/.npmrc` — which is legal where it is
- * written, and unrelated to this project — reaches the nested `npm audit` as
- * `npm_config_allow_scripts` and npm 12 rejects it with `EALLOWSCRIPTS: --allow-scripts is
- * not allowed in project-scoped installs`. The audit never runs, and the failure reads
- * like a broken audit script or a real advisory rather than one line of machine-global
- * config. Confirmed on npm 12.0.2, 2026-09-06.
+ * `npm run` exports every resolved config key into the script's environment as
+ * `npm_config_*`, including keys that came from a user- or global-level `.npmrc` this
+ * repository does not control. `allow-scripts` is one npm 12 then refuses to accept from a
+ * project scope: the nested `npm audit` sees `npm_config_allow_scripts`, exits with
+ * `EALLOWSCRIPTS`, and audits nothing — while reading like a broken script or a real
+ * advisory. The bare command is unaffected, so the failure appears only through `npm run`,
+ * which is the one form CI uses.
  *
- * Deleting the key from the CHILD's environment is the whole fix: it does not touch the
- * user's `~/.npmrc`, it does not disable anything the user set that key for (nothing here
- * installs), and on a machine — every CI runner included — where the key was never set,
- * this deletes nothing and the command is identical.
+ * Deleting the key from the CHILD's environment is the whole fix. It touches no config
+ * file, disables nothing (this command installs nothing), and where the key was never set
+ * — every CI runner — it deletes nothing and the command is unchanged.
  *
- * `--omit=dev` scopes the audit to what actually reaches a vault. `--audit-level=critical`
- * is what makes this a gate rather than a report: anything lower is advice, and a gate
- * nobody can clear is one people learn to ignore.
+ * `--omit=dev` scopes the audit to what actually reaches a vault: this plugin ships one
+ * runtime dependency and the rest of the tree is build-time only. `--audit-level=critical`
+ * is what makes this a gate rather than a report.
  */
 const env = { ...process.env };
 delete env.npm_config_allow_scripts;

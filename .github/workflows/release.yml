@@ -154,9 +154,9 @@ jobs:
             exit 1
           fi
 
-      # `npm run build` typechecks and writes the minified bundle to dist/main.js. The
-      # other two assets are source files committed at the repository root, so nothing
-      # generates them here.
+      # `npm run build` typechecks, writes the minified bundle to dist/main.js, and has the
+      # git-graph-styles vite plugin assemble styles/ into dist/styles.css. manifest.json is
+      # the only one of the three assets that is a committed source file.
       - name: Build plugin
         run: |
           npm ci
@@ -173,7 +173,7 @@ jobs:
           subject-path: |
             dist/main.js
             manifest.json
-            styles.css
+            dist/styles.css
 
       # `gh release create --notes-file` PREPENDS this ahead of `--generate-notes`'s own
       # output — the CLI's own documented behaviour — so the release body reads the
@@ -197,11 +197,11 @@ jobs:
           # any commit other than this one: by here, "the tag's commit" and "$GITHUB_SHA"
           # are the same commit whichever way the tag came to be.
           #
-          # Assets upload under their basename, so dist/main.js lands as main.js — the
-          # three file names Obsidian's installer looks for.
+          # Assets upload under their basename, so dist/main.js and dist/styles.css land as
+          # main.js and styles.css — the three file names Obsidian's installer looks for.
           gh release create "$TAG" \
             --title "$TAG" \
             --target "$GITHUB_SHA" \
             --notes-file release-notes.md \
             --generate-notes \
-            dist/main.js manifest.json styles.css
+            dist/main.js manifest.json dist/styles.css

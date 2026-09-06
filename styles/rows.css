@@ -1,0 +1,72 @@
+/* list and rows */
+.git-graph-list {
+	flex: 1 1 auto;
+	min-height: 0;
+	overflow-y: auto;
+	overflow-x: hidden;
+	position: relative;
+}
+.git-graph-list-spacer {
+	position: relative;
+	width: 100%;
+}
+.git-graph-item {
+	position: absolute;
+	top: 0;
+	left: 0;
+	right: 0;
+	will-change: transform;
+}
+.git-graph-row {
+	display: flex;
+	align-items: center;
+	gap: var(--size-4-2);
+	height: 22px;
+	padding: 0 var(--size-4-3) 0 var(--size-4-2);
+	font-size: var(--font-ui-smaller);
+	line-height: 22px;
+	white-space: nowrap;
+	cursor: pointer;
+	user-select: none;
+}
+.git-graph-row:hover,
+.git-graph-row:focus-visible {
+	background: var(--background-modifier-hover);
+	outline: none;
+}
+.git-graph-row-expanded {
+	background: var(--background-secondary);
+	font-weight: var(--font-semibold);
+}
+.git-graph-row-head .git-graph-subject {
+	font-weight: var(--font-semibold);
+}
+.git-graph-row-dirty {
+	color: var(--text-muted);
+	font-style: italic;
+	cursor: pointer;
+}
+.git-graph-subject {
+	flex: 1 1 auto;
+	min-width: 4em;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+.git-graph-refs {
+	display: flex;
+	gap: var(--size-2-1);
+	flex: 0 1 auto;
+	min-width: 0;
+	overflow: hidden;
+}
+.git-graph-author {
+	flex: 0 0 auto;
+	max-width: 9em;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	color: var(--text-muted);
+}
+.git-graph-date {
+	flex: 0 0 auto;
+	color: var(--text-faint);
+}

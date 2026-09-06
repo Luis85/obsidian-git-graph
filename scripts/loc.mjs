@@ -6,7 +6,11 @@ import path from 'node:path';
 // than either tier could reasonably justify.
 const MAX_FILE_CODE_LINES = 400;
 
-const TOP_LEVEL_DIRS = ['src', 'tests', 'scripts', 'harness'];
+// `styles` is here because eslint reaches no CSS at all, so the 400-line backstop is the
+// only cap the partials have. `styles-assemble.mjs` enforces the same number per partial at
+// build time, which is what makes a too-large partial fail the BUILD rather than only the
+// report; this keeps the whole directory visible in the LOC table alongside everything else.
+const TOP_LEVEL_DIRS = ['src', 'tests', 'scripts', 'harness', 'styles'];
 const EXTENSIONS = new Set(['.ts', '.vue', '.mjs', '.css']);
 const IGNORED_DIR_NAMES = new Set(['node_modules', 'dist', '.obsidian']);
 

@@ -2,12 +2,13 @@ import { copyFile, mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
 // Installs the built plugin into this repository's own vault: .obsidian/plugins/<id>/.
-// Obsidian loads these three file names; the manifest and styles are source files,
-// main.js is the vite build (`test-build` runs `vite build --mode development` first).
+// Obsidian loads these three file names. Only manifest.json is a source file; main.js and
+// styles.css are both vite output, which is why they are read from dist/ and renamed on the
+// way in (`test-build` runs `vite build --mode development` first).
 const VAULT_FILES = [
 	['dist/main.js', 'main.js'],
 	['manifest.json', 'manifest.json'],
-	['styles.css', 'styles.css'],
+	['dist/styles.css', 'styles.css'],
 ];
 
 const manifest = JSON.parse(await readFile('manifest.json', 'utf8'));

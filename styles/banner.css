@@ -1,0 +1,19 @@
+/* banner */
+.git-graph-banner {
+	display: flex;
+	align-items: center;
+	gap: var(--size-4-2);
+	margin: var(--size-4-2);
+	padding: var(--size-4-2);
+	border-radius: var(--radius-s);
+	background: var(--background-modifier-error);
+	color: var(--text-on-accent);
+	font-size: var(--font-ui-smaller);
+}
+.git-graph-banner-text {
+	flex: 1 1 auto;
+	white-space: pre-wrap;
+	word-break: break-word;
+}
+
+

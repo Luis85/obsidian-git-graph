@@ -1,0 +1,88 @@
+/* details */
+.git-graph-details {
+	padding: var(--size-4-2) var(--size-4-3) var(--size-4-3) var(--size-4-4);
+	background: var(--background-secondary);
+	border-bottom: 1px solid var(--background-modifier-border);
+	font-size: var(--font-ui-smaller);
+	white-space: normal;
+}
+/* The changes block has no hash/author/message above its file list, so it sits tighter. */
+.git-graph-dirty-details {
+	padding-top: var(--size-4-1);
+}
+.git-graph-details-hash {
+	display: flex;
+	align-items: center;
+	gap: var(--size-4-1);
+	font-family: var(--font-monospace);
+}
+.git-graph-details-hash code {
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+.git-graph-details-people {
+	color: var(--text-muted);
+	margin: var(--size-4-1) 0;
+}
+.git-graph-details-body {
+	margin: var(--size-4-2) 0;
+	padding: var(--size-4-2);
+	background: var(--background-primary);
+	border-radius: var(--radius-s);
+	white-space: pre-wrap;
+	word-break: break-word;
+	font-family: var(--font-text);
+	font-size: var(--font-ui-smaller);
+}
+.git-graph-details-error {
+	color: var(--text-error);
+}
+.git-graph-details-loading,
+.git-graph-files-empty {
+	color: var(--text-faint);
+}
+.git-graph-files {
+	list-style: none;
+	margin: 0;
+	padding: 0;
+}
+.git-graph-file {
+	list-style: none;
+}
+.git-graph-file-link {
+	display: flex;
+	width: 100%;
+	gap: var(--size-4-2);
+	align-items: baseline;
+	line-height: 1.6;
+	font-family: var(--font-monospace);
+	overflow: hidden;
+	cursor: pointer;
+	border-radius: var(--radius-s);
+}
+.git-graph-file-link:hover {
+	background: var(--background-modifier-hover);
+}
+.git-graph-file-link:hover .git-graph-file-path {
+	color: var(--text-accent);
+}
+.git-graph-file-link:focus-visible {
+	outline: 2px solid var(--background-modifier-border-focus);
+	outline-offset: -2px;
+}
+.git-graph-file-path {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+.git-graph-file-status {
+	flex: 0 0 1.2em;
+	font-weight: var(--font-bold);
+	text-align: center;
+}
+.git-graph-file-status-A { color: var(--color-green); }
+.git-graph-file-status-M { color: var(--color-orange); }
+.git-graph-file-status-D { color: var(--color-red); }
+.git-graph-file-status-R,
+.git-graph-file-status-C { color: var(--color-blue); }
+.git-graph-file-status-T { color: var(--color-purple); }

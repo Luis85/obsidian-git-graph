@@ -18,6 +18,8 @@
     "scripts/audit.mjs",
     "scripts/version-bump.mjs",
     "scripts/changelog-notes.mjs",
+    "scripts/styles-assemble.mjs",
+    "vite.config.ts",
     "harness/main.ts",
     "harness/obsidian-stub.ts",
     "harness/harness.spec.ts",
