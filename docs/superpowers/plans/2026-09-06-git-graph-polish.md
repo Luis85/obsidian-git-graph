@@ -29,7 +29,7 @@
 - Test: `tests/git/GitRepository.test.ts`, `tests/git/runGit.test.ts`, `tests/watch/gitWatcher.test.ts`, `tests/settings/settings.test.ts`, `tests/plugin/main.test.ts`
 
 **Interfaces:**
-- Produces: `GitRepository.gitCommonDir(): Promise<string>` — absolute path of the shared git dir (`rev-parse --path-format=absolute --git-common-dir`; equals `gitDir()` for a normal checkout, `<main>/.git` for a linked worktree). `GitWatcherOptions.commonDir?: string` — when given and different from `gitDir`, `refs/` and `packed-refs` are watched there as well. `isValidGitPath(value: string): boolean` from `src/settings/types.ts` — true for a bare command (no path separator) or an absolute path.
+- Produces: `GitRepository.gitCommonDir(): Promise<string>` — absolute path of the shared git dir (`rev-parse --git-common-dir`, resolved against `cwd` when git prints it relative — `--path-format=absolute` needs git 2.31 and was dropped in the final review, commit e19dcbe; equals `gitDir()` for a normal checkout, `<main>/.git` for a linked worktree). `GitWatcherOptions.commonDir?: string` — when given and different from `gitDir`, `refs/` and `packed-refs` are watched there as well. `isValidGitPath(value: string): boolean` from `src/settings/types.ts` — true for a bare command (no path separator) or an absolute path.
 
 - [ ] **Step 1: Failing tests**
 
@@ -101,9 +101,11 @@ Expected: the new tests fail (`gitCommonDir is not a function`, message mismatch
 ```ts
 	/** Shared git dir: same as gitDir() for a normal checkout, the main repository's .git for a linked worktree. */
 	async gitCommonDir(): Promise<string> {
-		return (await this.run(['rev-parse', '--path-format=absolute', '--git-common-dir'])).trim();
+		const out = (await this.run(['rev-parse', '--git-common-dir'])).trim();
+		return resolve(this.cwd, out);
 	}
 ```
+(import `resolve` from `node:path`.)
 
 `src/git/runGit.ts` — replace the fixed message:
 ```ts

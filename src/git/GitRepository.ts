@@ -44,7 +44,7 @@ export class GitRepository implements GitReader {
 	/**
 	 * Shared git dir: same as gitDir() for a normal checkout, the main repository's .git for a
 	 * linked worktree. Deliberately avoids `--path-format=absolute` (git >= 2.31 only, per
-	 * gitrevisions(7)); a relative result is resolved against `cwd` instead, which works back to
+	 * git-rev-parse(1)); a relative result is resolved against `cwd` instead, which works back to
 	 * git 2.5.
 	 */
 	async gitCommonDir(): Promise<string> {
