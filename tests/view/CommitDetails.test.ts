@@ -46,7 +46,7 @@ describe('CommitDetails', () => {
 
 	it('emits openFile with the current path when a file is clicked or activated with Enter', async () => {
 		const w = mount(CommitDetails, { props: { details, error: null } });
-		const files = w.findAll('.git-graph-file');
+		const files = w.findAll('.git-graph-file-link');
 		expect(files).toHaveLength(2);
 		await files[0]!.trigger('click');
 		await files[0]!.trigger('keydown', { key: 'Enter' });

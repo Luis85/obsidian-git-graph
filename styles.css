@@ -289,7 +289,11 @@
 	padding: 0;
 }
 .git-graph-file {
+	list-style: none;
+}
+.git-graph-file-link {
 	display: flex;
+	width: 100%;
 	gap: var(--size-4-2);
 	align-items: baseline;
 	line-height: 1.6;
@@ -298,13 +302,13 @@
 	cursor: pointer;
 	border-radius: var(--radius-s);
 }
-.git-graph-file:hover {
+.git-graph-file-link:hover {
 	background: var(--background-modifier-hover);
 }
-.git-graph-file:hover .git-graph-file-path {
+.git-graph-file-link:hover .git-graph-file-path {
 	color: var(--text-accent);
 }
-.git-graph-file:focus-visible {
+.git-graph-file-link:focus-visible {
 	outline: 2px solid var(--background-modifier-border-focus);
 	outline-offset: -2px;
 }

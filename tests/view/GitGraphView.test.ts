@@ -85,7 +85,7 @@ describe('GitGraphView', () => {
 		view.contentEl.querySelector<HTMLElement>('.git-graph-row')?.click();
 		reader.resolveDetails();
 		await flushPromises();
-		view.contentEl.querySelector<HTMLElement>('.git-graph-file')?.click();
+		view.contentEl.querySelector<HTMLElement>('.git-graph-file-link')?.click();
 
 		expect(host.openFile).toHaveBeenCalledWith('notes/a.md');
 	});

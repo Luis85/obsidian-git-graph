@@ -120,7 +120,7 @@ describe('GraphRoot', () => {
 		await w.get('.git-graph-row').trigger('click');
 		reader.resolveDetails();
 		await flushPromises();
-		await w.get('.git-graph-file').trigger('click');
+		await w.get('.git-graph-file-link').trigger('click');
 		expect(w.emitted('openFile')).toEqual([['notes/a.md']]);
 	});
 });

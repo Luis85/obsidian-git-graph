@@ -91,7 +91,7 @@ test('clicking a commit row opens its details', async ({ page }) => {
 test('clicking a changed file records it on window.__harness.opened', async ({ page }) => {
 	await open(page, 'scenario=merge');
 	await page.locator('.git-graph-row').first().click();
-	await page.locator('.git-graph-file').first().click();
+	await page.locator('.git-graph-file-link').first().click();
 	await expect.poll(() => page.evaluate(() => window.__harness.opened)).toHaveLength(1);
 });
 

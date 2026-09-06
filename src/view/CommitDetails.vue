@@ -61,14 +61,18 @@ function onFileKey(e: KeyboardEvent, path: string): void {
           v-for="f in details.files"
           :key="f.path"
           class="git-graph-file"
-          role="link"
-          tabindex="0"
-          :title="`Open ${f.path}`"
-          @click.stop="emit('openFile', f.path)"
-          @keydown="onFileKey($event, f.path)"
         >
-          <span :class="['git-graph-file-status', `git-graph-file-status-${f.status}`]">{{ f.status }}</span>
-          <span class="git-graph-file-path">{{ fileLabel(f) }}</span>
+          <span
+            class="git-graph-file-link"
+            role="link"
+            tabindex="0"
+            :title="`Open ${fileLabel(f)}`"
+            @click.stop="emit('openFile', f.path)"
+            @keydown="onFileKey($event, f.path)"
+          >
+            <span :class="['git-graph-file-status', `git-graph-file-status-${f.status}`]">{{ f.status }}</span>
+            <span class="git-graph-file-path">{{ fileLabel(f) }}</span>
+          </span>
         </li>
       </ul>
       <div

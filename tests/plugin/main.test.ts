@@ -214,7 +214,7 @@ describe('GitGraphPlugin', () => {
 			plugin.openFile('missing.md');
 			expect(Notice.shown.at(-1)).toContain('missing.md');
 			plugin.openFile('../outside.md');
-			expect(Notice.shown.at(-1)).toContain('outside');
+			expect(Notice.shown.at(-1)).toContain('outside this vault');
 			expect(app.workspace.opened).toHaveLength(1);
 			plugin.onunload();
 		});
