@@ -156,10 +156,10 @@ function setFilter(text: string): void {
 async function expandRow(needle: string): Promise<void> {
 	const wanted = needle.toLowerCase();
 	const commit = scenarioCommits(scenario.name).find((c) => c.hash.startsWith(wanted) || c.subject.toLowerCase().includes(wanted));
-	if (commit === undefined) return;
+	if (commit === undefined) throw new Error(`expand=${needle} matched no commit in scenario ${scenario.name}`);
 	const rows = [...document.querySelectorAll<HTMLElement>('.git-graph-row:not(.git-graph-row-dirty)')];
 	const row = rows.find((el) => el.querySelector('.git-graph-subject')?.textContent === commit.subject);
-	if (row === undefined) return;
+	if (row === undefined) throw new Error(`expand=${needle} matched "${commit.subject}" but that row is not rendered (scroll window)`);
 	row.click();
 	await waitFor(() => document.querySelector('.git-graph-details') !== null, 'the commit details panel');
 }

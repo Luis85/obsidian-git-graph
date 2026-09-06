@@ -1,10 +1,12 @@
 // Browser stand-in for the `obsidian` module, aliased in by vite.harness.config.ts.
 //
-// `src/view/**` imports exactly one name from `obsidian` (`setIcon`, in Icon.vue), so that is
-// all this file provides. Obsidian's real `setIcon` looks the name up in its bundled Lucide
-// set and appends the SVG; `lucide` on npm is the same icon set, so the harness renders the
-// same glyphs the plugin shows in Obsidian. Extend this only when src/view/** starts importing
-// something new — never to make the harness diverge from the plugin.
+// The harness's module graph (`harness/main.ts → GraphRoot.vue → …`) imports exactly one name
+// from `obsidian` (`setIcon`, in Icon.vue), so that is all this file provides.
+// `src/view/GitGraphView.ts` also imports `ItemView` but is never reached from the harness.
+// Obsidian's real `setIcon` looks the name up in its bundled Lucide set and appends the SVG;
+// `lucide` on npm is the same icon set, so the harness renders the same glyphs the plugin shows
+// in Obsidian. Extend this only when the harness's module graph starts importing something new
+// — never to make the harness diverge from the plugin.
 
 import { createElement, icons } from 'lucide';
 

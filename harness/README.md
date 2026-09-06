@@ -33,7 +33,7 @@ Everything is driven by the query string, so a screenshot or a test is one URL.
 | `theme` | `light`, `dark` | `light` | Adds `theme-dark` to `<body>`, like Obsidian's dark theme. |
 | `refs` | `auto`, `all` | `auto` | `settings.refFilter` — what the header dropdown shows and what the store passes to `log()`. |
 | `filter` | any text | none | Types the text into the commit filter box once the first load settles. |
-| `expand` | hash prefix or subject text | none | Opens that commit's details once the first load settles. The row has to be rendered (they are virtualized, so pick one near the top). |
+| `expand` | hash prefix or subject text | none | Opens that commit's details once the first load settles. The row has to be rendered (they are virtualized, so pick one near the top). An `expand` that matches no commit, or matches one whose row isn't rendered, rejects `ready` instead of silently rendering a plausible page. |
 | `dateFormat` | `relative`, `absolute` | `relative` | `settings.dateFormat`. Use `absolute` when you want a stable date column. |
 | `dirtyRow` | `0`, `1` | `1` | `settings.showDirtyRow`. |
 | `pageSize` | number ≥ 10 | `200` | `settings.pageSize`; lower it to make paging happen sooner. |
@@ -87,8 +87,9 @@ window.__harness = {
 `ready` is the thing to wait on. It resolves after the view reaches a terminal state (rows
 rendered, or an empty/error state shown), after any `filter=`/`expand=` parameter has been
 applied, and after two animation frames so Vue has flushed. It **rejects** (after 15 s) if the
-view never settles, so a broken harness fails loudly instead of screenshotting a blank frame.
-Never `waitForTimeout`; do this:
+view never settles, and it also rejects immediately if `expand=` names no commit in the
+scenario or a commit whose row isn't rendered — so a broken harness fails loudly instead of
+screenshotting a blank or merely plausible frame. Never `waitForTimeout`; do this:
 
 ```js
 await page.goto('http://localhost:5174/?scenario=branches&theme=dark');

@@ -39,13 +39,13 @@ npm run check        # build + lint + dead-code check + LOC backstop + coverage:
 
 `npm run check` runs, in order: `build` (typecheck + vite build), `lint` (oxlint then eslint),
 `deadcode` (fallow), `loc` (the LOC report and per-file backstop), then `test:coverage`
-(`vitest run --coverage`, which also runs every test). `tsconfig.json` includes both `src/**`
-and `tests/**`, so `npm run typecheck` (`vue-tsc --noEmit`) type-checks both; `build` and
-`test-build` call it instead of inlining `vue-tsc`.
+(`vitest run --coverage`, which also runs every test). `tsconfig.json` includes `src/**`,
+`tests/**`, `harness/**` and the root configs, so `npm run typecheck` (`vue-tsc --noEmit`)
+type-checks all of them; `build` and `test-build` call it instead of inlining `vue-tsc`.
 
 | Gate | Command | What fails it |
 |---|---|---|
-| Typecheck | `npm run typecheck` | A type error anywhere under `src/**` or `tests/**` (strict, `noUncheckedIndexedAccess`). |
+| Typecheck | `npm run typecheck` | A type error anywhere under `src/**`, `tests/**`, `harness/**` or the root configs (strict, `noUncheckedIndexedAccess`). |
 | Build | `npm run build` | `typecheck`, or the vite build itself, failing. |
 | oxlint | `npm run lint:oxlint` | Any oxlint correctness/suspicious finding. |
 | eslint | `npm run lint:eslint` | Any obsidianmd/typescript-eslint/vue rule, at `--max-warnings 0` — including the size/complexity limits: `src/**` caps `max-lines` (300), `max-lines-per-function` (80), `complexity` (12), `max-depth` (4), `max-params` (5), `max-nested-callbacks` (4); `tests/**` and `scripts/**` cap `max-lines` (500), `complexity` (15), `max-depth` (4) (no per-function line limit — a `describe` body is one function). A handful of pre-existing functions exceed these by a small, documented margin; each has a file-scoped override in `eslint.config.mjs` with a `// TODO(quality)` comment explaining why an extraction isn't trivial. |

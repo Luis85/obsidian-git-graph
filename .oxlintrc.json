@@ -35,6 +35,5 @@
         "unicorn/no-array-sort": "off"
       }
     }
-  ],
-  "rules": {}
+  ]
 }

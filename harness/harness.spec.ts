@@ -151,6 +151,18 @@ test('slow resolves its commit details after the fixture delay', async ({ page }
 	await expect(page.locator('.git-graph-files .git-graph-file').first()).toBeVisible();
 });
 
+test('an expand= that matches nothing fails loudly instead of rendering a plausible page', async ({ page }) => {
+	const errors: string[] = [];
+	page.on('console', (msg) => {
+		if (msg.type() === 'error') errors.push(msg.text());
+	});
+	await page.goto('/?scenario=merge&expand=no-such-commit');
+	await page.waitForFunction(() => window.__harness !== undefined);
+	const outcome = await page.evaluate(() => window.__harness.ready.then(() => 'resolved', (e: unknown) => `rejected: ${String(e)}`));
+	expect(outcome).toMatch(/^rejected: .*no-such-commit/);
+	expect(errors.some((t) => t.includes('no-such-commit'))).toBe(true);
+});
+
 test('the toolbar lists every scenario and navigates when one is picked', async ({ page }) => {
 	await open(page, 'scenario=merge');
 	const count = await page.evaluate(() => window.__harness.scenarios.length);

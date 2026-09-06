@@ -21,12 +21,9 @@
     "playwright.config.ts",
     "vite.harness.config.ts"
   ],
-  // `lucide` is imported only by harness/obsidian-stub.ts, which has to be a manual entry
-  // (nothing imports it — vite.harness.config.ts resolves it through an alias). fallow treats
-  // every manual entry as production code and so reported `lucide` under
-  // dev-dependencies-in-production; the harness never ships, and `entry` has no dev/runtime
-  // role to say so, so the package is exempted by name instead. The cost is that fallow will
-  // no longer notice if the harness stops importing lucide at all.
+  // Checked fallow's schema.json (v3.22.0, `node_modules/fallow/schema.json`): `entry` takes
+  // plain glob strings with no per-entry role, and `ignoreDependencies` has no scoped/per-file
+  // form — so exempting `lucide` by name is the only way to say "harness-only, not production".
   "ignoreDependencies": ["lucide"],
   "ignorePatterns": ["dist/**", "node_modules/**", ".obsidian/**", ".superpowers/**", "docs/**", "coverage/**", "harness-dist/**", "screenshots/**", "playwright-report/**", "test-results/**"]
 }
