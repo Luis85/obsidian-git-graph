@@ -8,8 +8,15 @@ vi.mock('node:fs', async (importOriginal) => {
 	return { ...actual, watch: vi.fn(actual.watch) };
 });
 
+vi.mock('../../src/watch/gitWatcher', async (importOriginal) => {
+	const actual = await importOriginal<typeof import('../../src/watch/gitWatcher')>();
+	return { ...actual, createGitWatcher: vi.fn(actual.createGitWatcher) };
+});
+
 import { App, FileSystemAdapter, Notice, Plugin as MockPlugin } from '../helpers/obsidian-mock';
-import GitGraphPlugin, { GIT_PATH_DEBOUNCE_MS } from '../../src/main';
+import { createGitWatcher } from '../../src/watch/gitWatcher';
+import { GitRepository } from '../../src/git/GitRepository';
+import GitGraphPlugin, { GIT_PATH_DEBOUNCE_MS, STATUS_DEBOUNCE_MS } from '../../src/main';
 import { DEFAULT_SETTINGS } from '../../src/settings/types';
 import { GIT_GRAPH_VIEW } from '../../src/view/GitGraphView';
 import { createFixtureRepo, type FixtureRepo } from '../helpers/fixtureRepo';
@@ -19,6 +26,8 @@ beforeAll(() => {
 	fixture = createFixtureRepo();
 });
 afterAll(() => fixture.dispose());
+
+const noop = (): void => undefined;
 
 function makePlugin(basePath: string, data: unknown = null): GitGraphPlugin & MockPlugin {
 	const app = new App();
@@ -203,6 +212,49 @@ describe('GitGraphPlugin', () => {
 			await vi.advanceTimersByTimeAsync(600);
 			expect(statusChanges).toBe(1);
 			expect(plugin.registeredEvents.map((r) => r.name)).toEqual(['modify', 'create', 'delete', 'rename']);
+			plugin.onunload();
+		});
+
+		it('ignores vault edits while the repository is not ready, even with a view open', async () => {
+			vi.useFakeTimers();
+			const outside = mkdtempSync(join(tmpdir(), 'git-graph-plugin-'));
+			try {
+				const plugin = makePlugin(outside);
+				await plugin.onload();
+				await plugin.initRepo();
+				expect(plugin.repoState.value.kind).toBe('none');
+				let statusChanges = 0;
+				plugin.statusChanges.on(() => statusChanges++);
+				plugin.viewOpened();
+				(plugin.app as unknown as App).vault.trigger('modify');
+				await vi.advanceTimersByTimeAsync(STATUS_DEBOUNCE_MS + 100);
+				expect(statusChanges).toBe(0);
+				plugin.onunload();
+			} finally {
+				rmSync(outside, { recursive: true, force: true });
+			}
+		});
+
+		it('drops the watcher of an init that was superseded while resolving the common dir', async () => {
+			const plugin = makePlugin(fixture.dir);
+			await plugin.onload();
+			await plugin.initRepo();
+			let release: () => void = noop;
+			const original = GitRepository.prototype.gitCommonDir;
+			const spy = vi.spyOn(GitRepository.prototype, 'gitCommonDir').mockImplementationOnce(function (this: GitRepository) {
+				return new Promise<void>((resolve) => {
+					release = resolve;
+				}).then(() => original.call(this));
+			});
+			vi.mocked(createGitWatcher).mockClear();
+			const stalled = plugin.initRepo();
+			await vi.waitFor(() => expect(spy).toHaveBeenCalledTimes(1));
+			const fresh = plugin.initRepo();
+			release();
+			await Promise.all([stalled, fresh]);
+			expect(plugin.repoState.value.kind).toBe('ready');
+			expect(createGitWatcher).toHaveBeenCalledTimes(1);
+			spy.mockRestore();
 			plugin.onunload();
 		});
 	});
