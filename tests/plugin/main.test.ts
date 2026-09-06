@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
-import { App, FileSystemAdapter, Plugin as MockPlugin } from '../helpers/obsidian-mock';
+import { App, FileSystemAdapter, Notice, Plugin as MockPlugin } from '../helpers/obsidian-mock';
 import GitGraphPlugin, { GIT_PATH_DEBOUNCE_MS } from '../../src/main';
 import { DEFAULT_SETTINGS } from '../../src/settings/types';
 import { GIT_GRAPH_VIEW } from '../../src/view/GitGraphView';
@@ -197,6 +197,25 @@ describe('GitGraphPlugin', () => {
 			await vi.advanceTimersByTimeAsync(600);
 			expect(statusChanges).toBe(1);
 			expect(plugin.registeredEvents.map((r) => r.name)).toEqual(['modify', 'create', 'delete', 'rename']);
+			plugin.onunload();
+		});
+	});
+
+	describe('openFile', () => {
+		it('opens a vault file in the current leaf, and notices for missing or outside paths', async () => {
+			const plugin = makePlugin(fixture.dir);
+			await plugin.onload();
+			await plugin.initRepo();
+			const app = plugin.app as unknown as App;
+			app.vault.files.set('renamed.md', { path: 'renamed.md' });
+			Notice.shown.length = 0;
+			plugin.openFile('renamed.md');
+			expect(app.workspace.opened).toEqual(['renamed.md']);
+			plugin.openFile('missing.md');
+			expect(Notice.shown.at(-1)).toContain('missing.md');
+			plugin.openFile('../outside.md');
+			expect(Notice.shown.at(-1)).toContain('outside');
+			expect(app.workspace.opened).toHaveLength(1);
 			plugin.onunload();
 		});
 	});

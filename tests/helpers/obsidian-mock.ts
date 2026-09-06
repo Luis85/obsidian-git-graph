@@ -43,6 +43,7 @@ export class App {
 	vault = {
 		adapter: new FileSystemAdapter('C:/fake-vault') as unknown,
 		handlers: {} as Record<string, (() => void)[]>,
+		files: new Map<string, { path: string }>(),
 		on(name: string, cb: () => void): EventRef {
 			(this.handlers[name] ??= []).push(cb);
 			return { name, cb };
@@ -50,9 +51,13 @@ export class App {
 		trigger(name: string): void {
 			for (const cb of this.handlers[name] ?? []) cb();
 		},
+		getFileByPath(path: string): { path: string } | null {
+			return this.files.get(path) ?? null;
+		},
 	};
 	workspace = {
 		leaves: [] as WorkspaceLeaf[],
+		opened: [] as string[],
 		layoutReady: false,
 		onLayoutReady(cb: () => void): void {
 			cb();
@@ -70,6 +75,15 @@ export class App {
 		},
 		revealLeaf(_leaf: WorkspaceLeaf): Promise<void> {
 			return Promise.resolve();
+		},
+		getLeaf(_newLeaf?: boolean): { openFile: (f: { path: string }) => Promise<void> } {
+			const opened = this.opened;
+			return {
+				openFile(f: { path: string }): Promise<void> {
+					opened.push(f.path);
+					return Promise.resolve();
+				},
+			};
 		},
 	};
 }

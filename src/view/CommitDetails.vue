@@ -4,6 +4,7 @@ import { formatAbsolute } from './dates';
 import Icon from './Icon.vue';
 
 defineProps<{ details: CommitDetails | null; error: string | null }>();
+const emit = defineEmits<{ openFile: [path: string] }>();
 
 function copy(text: string): void {
 	void navigator.clipboard?.writeText(text);
@@ -11,6 +12,14 @@ function copy(text: string): void {
 
 function fileLabel(f: ChangedFile): string {
 	return f.oldPath ? `${f.path} ← ${f.oldPath}` : f.path;
+}
+
+function onFileKey(e: KeyboardEvent, path: string): void {
+	if (e.key === 'Enter' || e.key === ' ') {
+		e.preventDefault();
+		e.stopPropagation();
+		emit('openFile', path);
+	}
 }
 </script>
 
@@ -52,7 +61,11 @@ function fileLabel(f: ChangedFile): string {
           v-for="f in details.files"
           :key="f.path"
           class="git-graph-file"
-          :title="fileLabel(f)"
+          role="link"
+          tabindex="0"
+          :title="`Open ${f.path}`"
+          @click.stop="emit('openFile', f.path)"
+          @keydown="onFileKey($event, f.path)"
         >
           <span :class="['git-graph-file-status', `git-graph-file-status-${f.status}`]">{{ f.status }}</span>
           <span class="git-graph-file-path">{{ fileLabel(f) }}</span>

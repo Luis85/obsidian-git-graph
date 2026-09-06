@@ -13,6 +13,8 @@
 			<button id="harness-emit" type="button">Emit change</button>
 			<span id="harness-description" class="harness-note"></span>
 		</div>
+		<!-- Set by harness/main.ts's onOpenFile handler; shows what openFile would have opened. -->
+		<div class="harness-toast" id="harness-toast"></div>
 		<!-- Sized by harness/main.ts from the width/height query parameters. GraphRoot mounts here. -->
 		<div id="app" class="harness-frame"></div>
 		<script type="module" src="./main.ts"></script>

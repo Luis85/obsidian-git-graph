@@ -15,6 +15,7 @@ interface HarnessApi {
 	readonly scenarios: readonly Scenario[];
 	readonly params: Record<string, string>;
 	readonly ready: Promise<void>;
+	readonly opened: string[];
 	emitChange(): void;
 	emitStatusChange(): void;
 	setFilter(text: string): void;
@@ -59,6 +60,14 @@ const settings = shallowRef(buildSettings());
 const changes = createEmitter<void>();
 const statusChanges = createEmitter<void>();
 const repoState = buildRepoState();
+const opened: string[] = [];
+
+/** Stands in for GitGraphPlugin.openFile: no vault to open a file in, so it just records the path. */
+function onOpenFile(path: string): void {
+	opened.push(path);
+	const toast = document.querySelector<HTMLElement>('#harness-toast');
+	if (toast !== null) toast.textContent = `Would open ${path}`;
+}
 
 // --- mount ----------------------------------------------------------------------------------
 
@@ -83,6 +92,7 @@ createApp({
 			onUpdateSettings: (patch: Partial<GitGraphSettings>) => {
 				settings.value = { ...settings.value, ...patch };
 			},
+			onOpenFile,
 		}),
 }).mount(frame);
 
@@ -188,6 +198,7 @@ window.__harness = {
 	scenarios: SCENARIOS,
 	params: Object.fromEntries(params),
 	ready,
+	opened,
 	emitChange: () => changes.emit(),
 	emitStatusChange: () => statusChanges.emit(),
 	setFilter,

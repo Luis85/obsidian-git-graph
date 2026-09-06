@@ -22,6 +22,7 @@ function makeHost(repoState: RepoState = { kind: 'none' }): ViewHost {
 		statusChanges: createEmitter<void>(),
 		viewOpened: vi.fn(),
 		viewClosed: vi.fn(),
+		openFile: vi.fn(),
 	};
 }
 
@@ -70,5 +71,22 @@ describe('GitGraphView', () => {
 		await flushPromises();
 
 		expect(host.updateSettings).toHaveBeenCalledWith({ refFilter: 'all' });
+	});
+
+	it('calls host.openFile when a file in the expanded commit is clicked', async () => {
+		const reader = new FakeReader();
+		reader.commits = linear(1);
+		reader.detailFiles = [{ path: 'notes/a.md', status: 'M' }];
+		const host = makeHost({ kind: 'ready', root: 'C:/vault', reader });
+		const view = new GitGraphView(makeLeaf(), host);
+
+		await view.onOpen();
+		await flushPromises();
+		view.contentEl.querySelector<HTMLElement>('.git-graph-row')?.click();
+		reader.resolveDetails();
+		await flushPromises();
+		view.contentEl.querySelector<HTMLElement>('.git-graph-file')?.click();
+
+		expect(host.openFile).toHaveBeenCalledWith('notes/a.md');
 	});
 });

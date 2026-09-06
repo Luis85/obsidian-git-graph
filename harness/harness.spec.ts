@@ -88,6 +88,13 @@ test('clicking a commit row opens its details', async ({ page }) => {
 	await expect(page.locator('.git-graph-details-hash code')).toHaveText(/^[0-9a-f]{40}$/);
 });
 
+test('clicking a changed file records it on window.__harness.opened', async ({ page }) => {
+	await open(page, 'scenario=merge');
+	await page.locator('.git-graph-row').first().click();
+	await page.locator('.git-graph-file').first().click();
+	await expect.poll(() => page.evaluate(() => window.__harness.opened)).toHaveLength(1);
+});
+
 test('a text filter hides the lane graph but keeps matching rows', async ({ page }) => {
 	await open(page, 'scenario=merge&filter=Fix');
 	await expect(page.locator('svg.git-graph-lanes')).toHaveCount(0);

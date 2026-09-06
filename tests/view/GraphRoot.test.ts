@@ -110,4 +110,17 @@ describe('GraphRoot', () => {
 		await w.findAll('.git-graph-row')[0]?.trigger('click');
 		expect(w.find('.git-graph-details').exists()).toBe(true);
 	});
+
+	it('re-emits openFile from the expanded commit', async () => {
+		const reader = new FakeReader();
+		reader.commits = linear(1);
+		reader.detailFiles = [{ path: 'notes/a.md', status: 'M' }];
+		const w = mountRoot({ kind: 'ready', root: 'C:/vault', reader });
+		await flushPromises();
+		await w.get('.git-graph-row').trigger('click');
+		reader.resolveDetails();
+		await flushPromises();
+		await w.get('.git-graph-file').trigger('click');
+		expect(w.emitted('openFile')).toEqual([['notes/a.md']]);
+	});
 });

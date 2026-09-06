@@ -29,7 +29,7 @@ const props = defineProps<{
 	dirty: Dirty | null;
 	viewportHeight?: number;
 }>();
-const emit = defineEmits<{ toggle: [hash: string]; loadMore: [] }>();
+const emit = defineEmits<{ toggle: [hash: string]; loadMore: []; openFile: [path: string] }>();
 
 const OVERSCAN = 5;
 const DETAILS_FALLBACK = 240;
@@ -173,6 +173,7 @@ const headLane = computed(() => props.rows.find((r) => r.hash === props.headHash
             <CommitDetails
               :details="expandedDetails"
               :error="detailsError"
+              @open-file="emit('openFile', $event)"
             />
           </div>
         </div>

@@ -1,4 +1,5 @@
 import { FileSystemAdapter, Notice, Plugin } from 'obsidian';
+import { isAbsolute, relative, resolve } from 'node:path';
 import { shallowRef } from 'vue';
 import { GitError } from './git/GitError';
 import { GitRepository } from './git/GitRepository';
@@ -170,5 +171,23 @@ export default class GitGraphPlugin extends Plugin implements ViewHost {
 	viewClosed(): void {
 		this.openViews = Math.max(0, this.openViews - 1);
 		if (this.openViews === 0) this.watcher?.pause();
+	}
+
+	/** Opens a repository-relative path in the current leaf when it lives inside this vault. */
+	openFile(path: string): void {
+		const state = this.repoState.value;
+		const adapter = this.app.vault.adapter;
+		if (state.kind !== 'ready' || !(adapter instanceof FileSystemAdapter)) return;
+		const vaultRelative = relative(adapter.getBasePath(), resolve(state.root, path)).replaceAll('\\', '/');
+		if (vaultRelative.startsWith('..') || isAbsolute(vaultRelative)) {
+			void new Notice(`Git graph: ${path} is outside this vault.`);
+			return;
+		}
+		const file = this.app.vault.getFileByPath(vaultRelative);
+		if (file === null) {
+			void new Notice(`Git graph: ${vaultRelative} is not in the vault (deleted or ignored).`);
+			return;
+		}
+		void this.app.workspace.getLeaf(false).openFile(file);
 	}
 }

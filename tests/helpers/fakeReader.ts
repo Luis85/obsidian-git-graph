@@ -1,4 +1,4 @@
-import type { Commit, CommitDetails, GitReader, RefFilter, RefsSnapshot } from '../../src/git/types';
+import type { ChangedFile, Commit, CommitDetails, GitReader, RefFilter, RefsSnapshot } from '../../src/git/types';
 
 export const commit = (hash: string, parent: string | null, subject = hash, author = 'Ann'): Commit => ({
 	hash,
@@ -23,6 +23,7 @@ export class FakeReader implements GitReader {
 	pendingLogs: ((c: Commit[]) => void)[] = [];
 	deferLog = false;
 	detailsResolvers: (() => void)[] = [];
+	detailFiles: ChangedFile[] = [];
 
 	log(opts: { skip: number; count: number; refs: RefFilter }): Promise<Commit[]> {
 		this.logCalls.push(opts);
@@ -47,7 +48,7 @@ export class FakeReader implements GitReader {
 			committer: 'Ann',
 			commitDate: '2026-09-06T00:00:00Z',
 			body: `body of ${hash}`,
-			files: [],
+			files: this.detailFiles,
 		}));
 	}
 	resolveDetails(): void {

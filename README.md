@@ -5,7 +5,9 @@ VS Code's Source Control graph as an Obsidian side pane. If your vault is a git 
 authors, dates, branch/tag/remote badges, the current HEAD, and a row for uncommitted
 changes. Click a commit to see its full message and changed files.
 
-Read-only: the plugin never runs a git command that modifies the repository.
+Read-only: the plugin never runs a git command that modifies the repository. Click a file in
+an expanded commit to open it in the editor (files outside the vault or no longer present show
+a notice).
 
 ## Requirements
 

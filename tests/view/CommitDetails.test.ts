@@ -43,4 +43,14 @@ describe('CommitDetails', () => {
 		await w.get('button.git-graph-copy').trigger('click');
 		expect(writeText).toHaveBeenCalledWith('abcdef1234567890');
 	});
+
+	it('emits openFile with the current path when a file is clicked or activated with Enter', async () => {
+		const w = mount(CommitDetails, { props: { details, error: null } });
+		const files = w.findAll('.git-graph-file');
+		expect(files).toHaveLength(2);
+		await files[0]!.trigger('click');
+		await files[0]!.trigger('keydown', { key: 'Enter' });
+		await files[1]!.trigger('click');
+		expect(w.emitted('openFile')).toEqual([['a.md'], ['a.md'], ['new.md']]);
+	});
 });

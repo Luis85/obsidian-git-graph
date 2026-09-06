@@ -295,6 +295,18 @@
 	line-height: 1.6;
 	font-family: var(--font-monospace);
 	overflow: hidden;
+	cursor: pointer;
+	border-radius: var(--radius-s);
+}
+.git-graph-file:hover {
+	background: var(--background-modifier-hover);
+}
+.git-graph-file:hover .git-graph-file-path {
+	color: var(--text-accent);
+}
+.git-graph-file:focus-visible {
+	outline: 2px solid var(--background-modifier-border-focus);
+	outline-offset: -2px;
 }
 .git-graph-file-path {
 	overflow: hidden;

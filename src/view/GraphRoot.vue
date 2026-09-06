@@ -9,7 +9,7 @@ import type { RepoState } from './repoState';
 import { createGraphStore, type GraphStore } from './store';
 
 const props = defineProps<{ repoState: RepoState; settings: GitGraphSettings; changes: Emitter<void>; statusChanges: Emitter<void> }>();
-const emit = defineEmits<{ updateSettings: [patch: Partial<GitGraphSettings>] }>();
+const emit = defineEmits<{ updateSettings: [patch: Partial<GitGraphSettings>]; openFile: [path: string] }>();
 
 const store = shallowRef<GraphStore | null>(null);
 let unsubscribeChanges: (() => void) | null = null;
@@ -140,6 +140,7 @@ function onRefFilter(value: RefFilter): void {
         :dirty="showGraph ? dirty : null"
         @toggle="store.toggleExpand($event)"
         @load-more="store.loadMore()"
+        @open-file="emit('openFile', $event)"
       />
     </template>
   </div>

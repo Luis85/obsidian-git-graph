@@ -78,11 +78,17 @@ window.__harness = {
   scenarios,          // [{ name, description, state?, refreshAfterLoad? }, ...]
   params,             // the query string as a plain object
   ready,              // Promise<void>, resolves once the first load has settled
+  opened,             // string[] — paths passed to GraphRoot's openFile emit, in click order
   emitChange(),       // fires the `changes` emitter — the plugin's "files changed" signal
   emitStatusChange(), // fires the `statusChanges` emitter — the plugin's debounced vault-edit signal
   setFilter(text),    // types into the commit filter box
 };
 ```
+
+Clicking (or pressing Enter/Space on) a changed file in the expanded commit's file list stands in
+for `GitGraphPlugin.openFile`: there is no real vault to open a file in, so `harness/main.ts`'s
+`onOpenFile` handler just pushes the path onto `window.__harness.opened` and writes
+"Would open &lt;path&gt;" into the `#harness-toast` element.
 
 `ready` is the thing to wait on. It resolves after the view reaches a terminal state (rows
 rendered, or an empty/error state shown), after any `filter=`/`expand=` parameter has been

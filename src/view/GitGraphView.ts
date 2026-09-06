@@ -16,6 +16,7 @@ export interface ViewHost extends SettingsHost {
 	readonly statusChanges: Emitter<void>;
 	viewOpened(): void;
 	viewClosed(): void;
+	openFile(path: string): void;
 }
 
 export class GitGraphView extends ItemView {
@@ -52,6 +53,7 @@ export class GitGraphView extends ItemView {
 					changes: host.changes,
 					statusChanges: host.statusChanges,
 					onUpdateSettings: (patch: Partial<GitGraphSettings>) => void host.updateSettings(patch),
+					onOpenFile: (path: string) => host.openFile(path),
 				}),
 		});
 		this.vueApp.mount(mountEl);
