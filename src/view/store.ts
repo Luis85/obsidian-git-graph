@@ -149,7 +149,7 @@ export function createGraphStore(deps: GraphStoreDeps): GraphStore {
 			if (gen !== generation || disposed) return;
 			state.error = errorMessage(e);
 		} finally {
-			if (gen === generation) state.loadingMore = false;
+			state.loadingMore = false;
 		}
 	}
 

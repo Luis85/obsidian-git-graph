@@ -107,6 +107,25 @@ describe('createGraphStore', () => {
 		expect(store.state.hasMore).toBe(false);
 	});
 
+	it('clears loadingMore when a reload completes and supersedes an in-flight loadMore', async () => {
+		const reader = new FakeReader();
+		reader.commits = linear(7);
+		const store = createGraphStore({ reader, settings: settings() });
+		await store.load();
+		reader.deferLog = true;
+		const more = store.loadMore();
+		const reload = store.load();
+		reader.pendingLogs[1]?.(linear(7).slice(0, 3));
+		await reload;
+		reader.pendingLogs[0]?.(linear(7).slice(3, 6));
+		await more;
+		expect(store.state.rows).toHaveLength(3);
+		expect(store.state.loadingMore).toBe(false);
+		reader.deferLog = false;
+		await store.loadMore();
+		expect(store.state.rows).toHaveLength(6);
+	});
+
 	it('keeps the previous rows and reports the error when a reload fails', async () => {
 		const reader = new FakeReader();
 		reader.commits = linear(2);
