@@ -22,7 +22,7 @@
     "harness:install": "playwright install chromium",
     "screenshot": "node scripts/screenshot.mjs",
     "check": "npm run build && npm run lint && npm run deadcode && npm run loc && npm run test:coverage",
-    "audit": "npm audit --omit=dev --audit-level=critical",
+    "audit": "node scripts/audit.mjs",
     "version": "node scripts/version-bump.mjs && git add manifest.json versions.json"
   },
   "keywords": [
