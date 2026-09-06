@@ -246,16 +246,19 @@ describe('GitGraphPlugin', () => {
 					release = resolve;
 				}).then(() => original.call(this));
 			});
-			vi.mocked(createGitWatcher).mockClear();
-			const stalled = plugin.initRepo();
-			await vi.waitFor(() => expect(spy).toHaveBeenCalledTimes(1));
-			const fresh = plugin.initRepo();
-			release();
-			await Promise.all([stalled, fresh]);
-			expect(plugin.repoState.value.kind).toBe('ready');
-			expect(createGitWatcher).toHaveBeenCalledTimes(1);
-			spy.mockRestore();
-			plugin.onunload();
+			try {
+				vi.mocked(createGitWatcher).mockClear();
+				const stalled = plugin.initRepo();
+				await vi.waitFor(() => expect(spy).toHaveBeenCalledTimes(1));
+				const fresh = plugin.initRepo();
+				release();
+				await Promise.all([stalled, fresh]);
+				expect(plugin.repoState.value.kind).toBe('ready');
+				expect(createGitWatcher).toHaveBeenCalledTimes(1);
+			} finally {
+				spy.mockRestore();
+				plugin.onunload();
+			}
 		});
 	});
 
