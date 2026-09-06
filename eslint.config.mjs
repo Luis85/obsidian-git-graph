@@ -139,16 +139,6 @@ export default defineConfig([
 			'max-lines-per-function': ['error', { max: 125, skipBlankLines: true, skipComments: true, IIFEs: true }],
 		},
 	},
-	{
-		files: ['src/watch/gitWatcher.ts'],
-		rules: {
-			// TODO(quality): createGitWatcher has 81 lines (limit 80), one line over. Same
-			// closure-factory shape as store.ts's createGraphStore: pause/resume/dispose close
-			// over shared private state (watchers, timer, paused, dropped, disposed, reported);
-			// not a trivial extraction. Out of scope for this task.
-			'max-lines-per-function': ['error', { max: 81, skipBlankLines: true, skipComments: true, IIFEs: true }],
-		},
-	},
 	// Must stay last: turns off eslint core/typescript-eslint/unicorn rules that oxlint
 	// already covers with its own (faster) implementation, so the two linters don't
 	// duplicate work. Read from .oxlintrc.json so the two configs can't drift apart.

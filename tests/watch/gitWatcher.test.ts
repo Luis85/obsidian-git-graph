@@ -80,18 +80,21 @@ describe('createGitWatcher', () => {
 
 	it('watches refs and packed-refs in the common dir when it differs from gitDir', async () => {
 		const common = mkdtempSync(join(tmpdir(), 'git-graph-common-'));
-		mkdirSync(join(common, 'refs', 'heads'), { recursive: true });
-		const onChange = vi.fn();
-		watcher = createGitWatcher(gitDir, onChange, { debounceMs: 50, commonDir: common });
-		await settle();
-		writeFileSync(join(common, 'refs', 'heads', 'shared'), 'abc\n');
-		await settle();
-		expect(onChange).toHaveBeenCalledTimes(1);
-		writeFileSync(join(common, 'packed-refs'), '# pack-refs\n');
-		await settle();
-		expect(onChange).toHaveBeenCalledTimes(2);
-		watcher.dispose();
-		watcher = null;
-		rmSync(common, { recursive: true, force: true });
+		try {
+			mkdirSync(join(common, 'refs', 'heads'), { recursive: true });
+			const onChange = vi.fn();
+			watcher = createGitWatcher(gitDir, onChange, { debounceMs: 50, commonDir: common });
+			await settle();
+			writeFileSync(join(common, 'refs', 'heads', 'shared'), 'abc\n');
+			await settle();
+			expect(onChange).toHaveBeenCalledTimes(1);
+			writeFileSync(join(common, 'packed-refs'), '# pack-refs\n');
+			await settle();
+			expect(onChange).toHaveBeenCalledTimes(2);
+		} finally {
+			watcher?.dispose();
+			watcher = null;
+			rmSync(common, { recursive: true, force: true });
+		}
 	});
 });
