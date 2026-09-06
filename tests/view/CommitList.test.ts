@@ -19,7 +19,6 @@ const mountList = (over: Record<string, unknown> = {}) =>
 			commitOf: (h: string) => commits.get(h),
 			refsByHash: new Map(),
 			headHash: 'c0',
-			headBranch: 'main',
 			expandedHash: null,
 			expandedDetails: null,
 			detailsError: null,

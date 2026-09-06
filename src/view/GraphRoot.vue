@@ -127,7 +127,6 @@ function onRefFilter(value: RefFilter): void {
         :commit-of="store.commitOf"
         :refs-by-hash="store.state.refsByHash"
         :head-hash="store.state.headHash"
-        :head-branch="store.state.headBranch"
         :expanded-hash="store.state.expandedHash"
         :expanded-details="store.state.expandedDetails"
         :details-error="store.state.detailsError"

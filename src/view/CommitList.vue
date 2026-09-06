@@ -20,7 +20,6 @@ const props = defineProps<{
 	commitOf: (hash: string) => Commit | undefined;
 	refsByHash: Map<string, Ref[]>;
 	headHash: string | null;
-	headBranch: string | null;
 	expandedHash: string | null;
 	expandedDetails: Details | null;
 	detailsError: string | null;
@@ -147,7 +146,6 @@ const headLane = computed(() => props.rows.find((r) => r.hash === props.headHash
             :commit="commitOf(row.hash)!"
             :refs="refsByHash.get(row.hash) ?? []"
             :is-head="row.hash === headHash"
-            :head-branch="headBranch"
             :expanded="row.hash === expandedHash"
             :date-format="dateFormat"
             :show-graph="showGraph"
@@ -160,7 +158,6 @@ const headLane = computed(() => props.rows.find((r) => r.hash === props.headHash
             <CommitDetails
               :details="expandedDetails"
               :error="detailsError"
-              :hash="row.hash"
             />
           </div>
         </div>

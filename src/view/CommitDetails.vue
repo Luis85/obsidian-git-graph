@@ -3,7 +3,7 @@ import type { ChangedFile, CommitDetails } from '../git/types';
 import { formatAbsolute } from './dates';
 import Icon from './Icon.vue';
 
-defineProps<{ details: CommitDetails | null; error: string | null; hash: string }>();
+defineProps<{ details: CommitDetails | null; error: string | null }>();
 
 function copy(text: string): void {
 	void navigator.clipboard?.writeText(text);

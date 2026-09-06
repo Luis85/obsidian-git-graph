@@ -5,3 +5,5 @@ node_modules/
 *.js.map
 .DS_Store
 /coverage/
+# fallow's incremental parse cache (npm run deadcode)
+/.fallow/

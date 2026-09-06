@@ -14,7 +14,7 @@ const refs: Ref[] = [
 ];
 
 const mountRow = (over: Partial<InstanceType<typeof CommitRow>['$props']> = {}) =>
-	mount(CommitRow, { props: { row, commit, refs, isHead: true, headBranch: 'main', expanded: false, dateFormat: 'absolute', showGraph: true, ...over } });
+	mount(CommitRow, { props: { row, commit, refs, isHead: true, expanded: false, dateFormat: 'absolute', showGraph: true, ...over } });
 
 describe('CommitRow', () => {
 	it('renders subject, author, absolute date and the lane cell', () => {

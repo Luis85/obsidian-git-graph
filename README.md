@@ -33,7 +33,14 @@ own when files change.
 ```bash
 npm install
 npm run test-build   # builds and installs into .obsidian/plugins/git-graph/ — open this repo as a vault
-npm run check        # build + lint + tests
+npm run check        # build + lint + dead-code check + tests: the pre-commit gate
 ```
+
+- `npm run lint` — oxlint (fast correctness/suspicious checks), then eslint (obsidianmd plugin
+  guidelines, typescript-eslint, vue rules; oxlint's overlapping rules are turned off so the two
+  don't duplicate work).
+- `npm run deadcode` — fallow, which flags unused exports, files, component props and
+  dependencies.
+- `npm run check` — the full pre-commit gate: build, lint, deadcode, then tests.
 
 Lane colors can be changed by a CSS snippet overriding `--git-graph-lane-0` … `--git-graph-lane-7`.

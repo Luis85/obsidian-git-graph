@@ -12,7 +12,6 @@ const props = defineProps<{
 	commit: Commit;
 	refs: Ref[];
 	isHead: boolean;
-	headBranch: string | null;
 	expanded: boolean;
 	dateFormat: DateFormat;
 	showGraph: boolean;

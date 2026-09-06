@@ -26,13 +26,13 @@ describe('normalizeSettings', () => {
 	});
 });
 
-describe('GitGraphSettingTab', () => {
-	function makeTab() {
-		const host = { settings: { ...DEFAULT_SETTINGS }, updateSettings: vi.fn(() => Promise.resolve()) };
-		const tab = new GitGraphSettingTab(new MockApp() as unknown as App, host);
-		return { host, tab };
-	}
+function makeTab() {
+	const host = { settings: { ...DEFAULT_SETTINGS }, updateSettings: vi.fn(() => Promise.resolve()) };
+	const tab = new GitGraphSettingTab(new MockApp() as unknown as App, host);
+	return { host, tab };
+}
 
+describe('GitGraphSettingTab', () => {
 	it('returns five setting definitions in order with the right names and control key/type pairs', () => {
 		const { tab } = makeTab();
 		const defs = tab.getSettingDefinitions();

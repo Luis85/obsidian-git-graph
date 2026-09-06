@@ -19,12 +19,12 @@ const details: Details = {
 
 describe('CommitDetails', () => {
 	it('shows loading, then error', () => {
-		expect(mount(CommitDetails, { props: { details: null, error: null, hash: 'abc' } }).text()).toContain('Loading');
-		expect(mount(CommitDetails, { props: { details: null, error: 'fatal: nope', hash: 'abc' } }).text()).toContain('fatal: nope');
+		expect(mount(CommitDetails, { props: { details: null, error: null } }).text()).toContain('Loading');
+		expect(mount(CommitDetails, { props: { details: null, error: 'fatal: nope' } }).text()).toContain('fatal: nope');
 	});
 
 	it('renders hash, people, body and files with status letters', () => {
-		const w = mount(CommitDetails, { props: { details, error: null, hash: details.hash } });
+		const w = mount(CommitDetails, { props: { details, error: null } });
 		expect(w.get('.git-graph-details-hash').text()).toContain('abcdef1234567890');
 		expect(w.text()).toContain('Ann <a@x>');
 		expect(w.text()).toContain('Cara');
@@ -39,7 +39,7 @@ describe('CommitDetails', () => {
 	it('copies the hash to the clipboard', async () => {
 		const writeText = vi.fn(() => Promise.resolve());
 		Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
-		const w = mount(CommitDetails, { props: { details, error: null, hash: details.hash } });
+		const w = mount(CommitDetails, { props: { details, error: null } });
 		await w.get('button.git-graph-copy').trigger('click');
 		expect(writeText).toHaveBeenCalledWith('abcdef1234567890');
 	});

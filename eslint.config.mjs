@@ -5,6 +5,7 @@ import { defineConfig } from 'eslint/config';
 import obsidianmd from 'eslint-plugin-obsidianmd';
 import pluginVue from 'eslint-plugin-vue';
 import vueParser from 'vue-eslint-parser';
+import oxlint from 'eslint-plugin-oxlint';
 
 const SRC = ['src/**/*.ts', 'src/**/*.vue'];
 const TESTS = ['tests/**/*.ts'];
@@ -88,4 +89,9 @@ export default defineConfig([
 		extends: [tseslint.configs.recommended],
 		languageOptions: { parser: tsparser },
 	},
+	// Must stay last: turns off eslint core/typescript-eslint/unicorn rules that oxlint
+	// already covers with its own (faster) implementation, so the two linters don't
+	// duplicate work. Read from .oxlintrc.json so the two configs can't drift apart.
+	// This never touches obsidianmd's rules — oxlint doesn't know about that plugin.
+	...oxlint.buildFromOxlintConfigFile('./.oxlintrc.json'),
 ]);

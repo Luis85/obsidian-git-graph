@@ -40,7 +40,7 @@ export interface GraphStore {
 	dispose(): void;
 }
 
-export function errorMessage(e: unknown): string {
+function errorMessage(e: unknown): string {
 	if (e instanceof GitError || e instanceof Error) return e.message;
 	return String(e);
 }

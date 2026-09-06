@@ -1,6 +1,6 @@
 import type { ChangedFile, Commit, CommitDetails, FileStatus, Ref } from './types';
 
-export const FIELD_SEP = '\x1f';
+const FIELD_SEP = '\x1f';
 const RECORD_SEP = '\0';
 
 export const LOG_FORMAT = '%H%x1f%P%x1f%an%x1f%ae%x1f%aI%x1f%s';

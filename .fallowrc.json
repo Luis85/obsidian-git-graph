@@ -1,0 +1,12 @@
+{
+  "$schema": "./node_modules/fallow/schema.json",
+  // fallow's built-in obsidian/vite/vitest/eslint/oxlint/typescript plugins already
+  // discover these as entries and already credit every toolchain devDependency as used
+  // (obsidian, @types/node, jsdom, vue-tsc, typescript, vitest, vite, eslint + its
+  // plugins, @vitejs/plugin-vue, @vue/test-utils, oxlint) via package.json, tsconfig.json,
+  // vite/vitest configs and eslint.config.mjs — verified with `npx fallow list` and a
+  // clean `npx fallow dead-code` run. These `entry` globs are listed explicitly anyway,
+  // per this project's convention of not relying on undocumented auto-detection.
+  "entry": ["src/main.ts", "tests/**/*.test.ts", "scripts/test-build.mjs"],
+  "ignorePatterns": ["dist/**", "node_modules/**", ".obsidian/**", ".superpowers/**", "docs/**", "coverage/**"]
+}

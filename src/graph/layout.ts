@@ -1,7 +1,7 @@
 import type { Commit } from '../git/types';
 import type { Lane, LayoutState, Row, Segment } from './types';
 
-export const LANE_COLORS = 8;
+const LANE_COLORS = 8;
 
 export function emptyLayoutState(): LayoutState {
 	return { lanes: [], nextColor: 0 };
