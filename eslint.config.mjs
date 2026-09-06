@@ -89,6 +89,64 @@ export default defineConfig([
 		extends: [tseslint.configs.recommended],
 		languageOptions: { parser: tsparser },
 	},
+	// Size and complexity backstops. Placed before the oxlint entry below so oxlint's
+	// rule-disabling (it turns off eslint/typescript-eslint rules it re-implements) never
+	// touches these — none of complexity/max-lines/max-lines-per-function/max-depth/
+	// max-params/max-nested-callbacks are in oxlint's own rule set, so this ordering is
+	// safety margin rather than a fix for an observed conflict.
+	{
+		files: SRC,
+		rules: {
+			'max-lines': ['error', { max: 300, skipBlankLines: true, skipComments: true }],
+			'max-lines-per-function': ['error', { max: 80, skipBlankLines: true, skipComments: true, IIFEs: true }],
+			complexity: ['error', 12],
+			'max-depth': ['error', 4],
+			'max-params': ['error', 5],
+			'max-nested-callbacks': ['error', 4],
+		},
+	},
+	{
+		files: ['tests/**/*.ts', 'scripts/**/*.mjs', '*.ts', '*.mjs'],
+		rules: {
+			'max-lines': ['error', { max: 500, skipBlankLines: true, skipComments: true }],
+			complexity: ['error', 15],
+			'max-depth': ['error', 4],
+		},
+	},
+	{
+		files: ['src/settings/types.ts'],
+		rules: {
+			// TODO(quality): normalizeSettings has a complexity of 13 (limit 12). It validates
+			// 5 independent optional settings fields, each with its own type/range check; the
+			// complexity comes from that flat list, not from nested control flow. Extracting a
+			// genuinely trivial helper isn't possible without inventing a generic
+			// pick-and-validate abstraction across differently-shaped fields (string, enum,
+			// bounded number, boolean) — a real design change, out of scope for this task.
+			complexity: ['error', 13],
+		},
+	},
+	{
+		files: ['src/view/store.ts'],
+		rules: {
+			// TODO(quality): createGraphStore has 125 lines (limit 80). It is a closure-factory
+			// (load/loadMore/toggleExpand/collapse close over shared private state: state,
+			// byHash, generation, disposed) rather than one long procedural function; pulling
+			// those methods out to module scope would mean threading that shared mutable state
+			// through explicit parameters everywhere, which is a real refactor (arguably to a
+			// class), not a trivial behavior-preserving extraction. Out of scope for this task.
+			'max-lines-per-function': ['error', { max: 125, skipBlankLines: true, skipComments: true, IIFEs: true }],
+		},
+	},
+	{
+		files: ['src/watch/gitWatcher.ts'],
+		rules: {
+			// TODO(quality): createGitWatcher has 81 lines (limit 80), one line over. Same
+			// closure-factory shape as store.ts's createGraphStore: pause/resume/dispose close
+			// over shared private state (watchers, timer, paused, dropped, disposed, reported);
+			// not a trivial extraction. Out of scope for this task.
+			'max-lines-per-function': ['error', { max: 81, skipBlankLines: true, skipComments: true, IIFEs: true }],
+		},
+	},
 	// Must stay last: turns off eslint core/typescript-eslint/unicorn rules that oxlint
 	// already covers with its own (faster) implementation, so the two linters don't
 	// duplicate work. Read from .oxlintrc.json so the two configs can't drift apart.

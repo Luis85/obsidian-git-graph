@@ -11,6 +11,23 @@ export default defineConfig({
 	},
 	test: {
 		testTimeout: 20000,
+		coverage: {
+			provider: 'v8',
+			include: ['src/**/*.{ts,vue}'],
+			exclude: ['src/view/vue-shim.d.ts'],
+			reporter: ['text', 'html', 'lcov'],
+			reportsDirectory: 'coverage',
+			// Baseline (npx vitest run --coverage, no thresholds, src/**/*.{ts,vue} only):
+			// statements 92.04%, branches 81.37%, functions 92.85%, lines 94.07%. Each rounded
+			// down to a multiple of 5, then floored at 80/80/80/70 (all four are above their
+			// floor, so the rounded-down baseline is used as-is).
+			thresholds: {
+				statements: 90,
+				branches: 80,
+				functions: 90,
+				lines: 90,
+			},
+		},
 		projects: [
 			{
 				extends: true,

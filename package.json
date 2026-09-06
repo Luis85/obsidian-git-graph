@@ -5,24 +5,35 @@
   "type": "module",
   "scripts": {
     "dev": "vite build --watch --mode development",
-    "build": "vue-tsc -noEmit && vite build",
-    "test-build": "vue-tsc -noEmit && vite build --mode development && node scripts/test-build.mjs",
+    "typecheck": "vue-tsc --noEmit",
+    "build": "npm run typecheck && vite build",
+    "test-build": "npm run typecheck && vite build --mode development && node scripts/test-build.mjs",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
     "lint:oxlint": "oxlint .",
     "lint:eslint": "eslint . --max-warnings 0",
     "lint": "npm run lint:oxlint && npm run lint:eslint",
     "deadcode": "fallow dead-code",
-    "check": "npm run build && npm run lint && npm run deadcode && npm run test"
+    "loc": "node scripts/loc.mjs",
+    "check": "npm run build && npm run lint && npm run deadcode && npm run loc && npm run test:coverage"
   },
-  "keywords": ["obsidian", "obsidian-plugin", "git", "graph"],
+  "keywords": [
+    "obsidian",
+    "obsidian-plugin",
+    "git",
+    "graph"
+  ],
   "author": "Luis85",
   "license": "MIT",
-  "engines": { "node": ">=22" },
+  "engines": {
+    "node": ">=22"
+  },
   "devDependencies": {
     "@types/node": "^22.20.1",
     "@typescript-eslint/parser": "^8.68.0",
     "@vitejs/plugin-vue": "^6.0.8",
+    "@vitest/coverage-v8": "^4.1.10",
     "@vue/test-utils": "^2.4.11",
     "eslint": "^10.9.1",
     "eslint-plugin-obsidianmd": "^0.4.2",

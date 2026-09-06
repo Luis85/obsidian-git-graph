@@ -32,19 +32,26 @@ const REF_KINDS: readonly [prefix: string, kind: Ref['kind']][] = [
 	['refs/tags/', 'tag'],
 ];
 
+// Split out of parseRefs so the loop body isn't one large branchy function (eslint
+// complexity backstop): a single line's worth of skip/parse decisions, unchanged in behavior.
+function parseRefLine(line: string): Ref | null {
+	if (line.length === 0) return null;
+	const [objectname = '', derefed = '', refname = '', upstream = '', head = ''] = line.split(FIELD_SEP);
+	const match = REF_KINDS.find(([prefix]) => refname.startsWith(prefix));
+	if (match === undefined) return null;
+	const [prefix, kind] = match;
+	const name = refname.slice(prefix.length);
+	if (kind === 'remote' && name.endsWith('/HEAD')) return null;
+	const ref: Ref = { hash: derefed.length > 0 ? derefed : objectname, name, kind, isHead: head === '*' };
+	if (upstream.length > 0) ref.upstream = upstream;
+	return ref;
+}
+
 export function parseRefs(stdout: string): Ref[] {
 	const refs: Ref[] = [];
 	for (const line of stdout.split('\n')) {
-		if (line.length === 0) continue;
-		const [objectname = '', derefed = '', refname = '', upstream = '', head = ''] = line.split(FIELD_SEP);
-		const match = REF_KINDS.find(([prefix]) => refname.startsWith(prefix));
-		if (match === undefined) continue;
-		const [prefix, kind] = match;
-		const name = refname.slice(prefix.length);
-		if (kind === 'remote' && name.endsWith('/HEAD')) continue;
-		const ref: Ref = { hash: derefed.length > 0 ? derefed : objectname, name, kind, isHead: head === '*' };
-		if (upstream.length > 0) ref.upstream = upstream;
-		refs.push(ref);
+		const ref = parseRefLine(line);
+		if (ref !== null) refs.push(ref);
 	}
 	return refs;
 }
