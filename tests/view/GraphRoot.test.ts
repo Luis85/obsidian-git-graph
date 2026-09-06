@@ -74,6 +74,21 @@ describe('GraphRoot', () => {
 		expect(w.find('.git-graph-banner').exists()).toBe(false);
 	});
 
+	it('shows the banner, not "No commits yet.", when an empty repository cannot report its status', async () => {
+		const reader = new FakeReader();
+		reader.commits = [];
+		reader.failStatus = new Error('fatal: index locked');
+		const w = mountRoot({ kind: 'ready', root: 'C:/vault', reader });
+		await flushPromises();
+		expect(w.get('.git-graph-banner').text()).toContain('fatal: index locked');
+		expect(w.text()).not.toContain('No commits yet.');
+		reader.failStatus = null;
+		await w.get('.git-graph-banner button').trigger('click');
+		await flushPromises();
+		expect(w.find('.git-graph-banner').exists()).toBe(false);
+		expect(w.text()).toContain('No commits yet.');
+	});
+
 	it('refreshes only the changes row on a status change event', async () => {
 		const reader = new FakeReader();
 		reader.commits = linear(2);

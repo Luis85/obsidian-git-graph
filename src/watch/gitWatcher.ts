@@ -1,5 +1,9 @@
-import { existsSync, watch, type FSWatcher } from 'node:fs';
-import { join, resolve } from 'node:path';
+// Imported as a namespace (rather than destructured): in the watcher and plugin tests, the
+// `vi.mock('node:fs', ...)` replacing `fs.watch`/`fs.existsSync` was only observed to take effect
+// through a namespace import. Using `fs.watch`/`fs.existsSync` here keeps that mock working.
+import * as fs from 'node:fs';
+import { join } from 'node:path';
+import { samePath } from '../util/paths';
 
 export interface GitWatcher {
 	pause(): void;
@@ -13,7 +17,9 @@ export interface GitWatcherOptions {
 	/**
 	 * The shared git dir for a linked worktree (`GitRepository.gitCommonDir()`). When given and
 	 * different from `gitDir`, its `refs/` and `packed-refs` are watched too, since branch/tag
-	 * updates for a linked worktree land there rather than in the per-worktree gitDir.
+	 * updates for a linked worktree land there rather than in the per-worktree gitDir. Compared
+	 * by canonical path, so a vault opened under another spelling (case, 8.3 short name, junction)
+	 * of the same directory is not watched twice.
 	 */
 	commonDir?: string;
 }
@@ -37,7 +43,7 @@ function watchRefs(dir: string, add: AddFn): void {
 }
 
 function watchGitDir(dir: string, add: AddFn, onDirEvent: DirListener, report: (error: unknown) => void): void {
-	if (!existsSync(dir)) {
+	if (!fs.existsSync(dir)) {
 		report(new Error(`git directory not found: ${dir}`));
 		return;
 	}
@@ -48,7 +54,7 @@ function watchGitDir(dir: string, add: AddFn, onDirEvent: DirListener, report: (
 
 /** Also watches refs/ and packed-refs in the shared common dir of a linked worktree, when it differs from gitDir. */
 function watchCommonDir(commonDir: string | undefined, gitDir: string, add: AddFn, onDirEvent: DirListener): void {
-	if (commonDir === undefined || !existsSync(commonDir) || resolve(commonDir) === resolve(gitDir)) return;
+	if (commonDir === undefined || !fs.existsSync(commonDir) || samePath(commonDir, gitDir)) return;
 	add(join(commonDir, 'packed-refs'), false);
 	add(commonDir, false, onDirEvent);
 	watchRefs(commonDir, add);
@@ -56,7 +62,7 @@ function watchCommonDir(commonDir: string | undefined, gitDir: string, add: AddF
 
 export function createGitWatcher(gitDir: string, onChange: () => void, opts: GitWatcherOptions = {}): GitWatcher {
 	const debounceMs = opts.debounceMs ?? 500;
-	const watchers: FSWatcher[] = [];
+	const watchers: fs.FSWatcher[] = [];
 	// Runs in Obsidian's Electron renderer, so timers go through `window` per the
 	// obsidianmd popout-window rule (obsidianmd/prefer-window-timers).
 	let timer: number | null = null;
@@ -89,9 +95,9 @@ export function createGitWatcher(gitDir: string, onChange: () => void, opts: Git
 		recursive: boolean,
 		listener: (eventType: string, filename: string | Buffer | null) => void = schedule,
 	): boolean => {
-		if (!existsSync(path)) return false;
+		if (!fs.existsSync(path)) return false;
 		try {
-			const w = watch(path, { recursive, persistent: false }, listener);
+			const w = fs.watch(path, { recursive, persistent: false }, listener);
 			w.on('error', report);
 			watchers.push(w);
 			return true;

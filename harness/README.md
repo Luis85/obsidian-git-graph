@@ -58,7 +58,7 @@ http://localhost:5174/?scenario=dirty&filter=Fix
 | `octopus` | A three-parent octopus merge. |
 | `branches` | Four open lanes, remotes and tags, with HEAD below the first row. |
 | `long` | 600 commits, so scrolling to the bottom pages in more (`log` honours skip/count). |
-| `dirty` | The `merge` history plus three uncommitted working tree changes; the changes row expands into their file list. |
+| `dirty` | The `merge` history plus three uncommitted working tree changes (one of them deleted); the changes row expands into their file list. |
 | `empty` | A repository with no commits yet. |
 | `error` | The first load succeeds, every later one fails: the error banner over kept rows. |
 | `slow` | Commit details take 1.5 s to resolve, for the details loading state. |
@@ -87,8 +87,10 @@ window.__harness = {
 
 Clicking (or pressing Enter/Space on) a changed file in the expanded commit's file list stands in
 for `GitGraphPlugin.openFile`: there is no real vault to open a file in, so `harness/main.ts`'s
-`onOpenFile` handler just pushes the path onto `window.__harness.opened` and writes
-"Would open &lt;path&gt;" into the `#harness-toast` element.
+`onOpenFile` handler just pushes the path onto `window.__harness.opened` and shows
+"Would open &lt;path&gt;" in the `.harness-toast` strip under the toolbar. The strip is hidden
+while empty and clears on the next `changes`/`statusChanges` emit (the Emit change button,
+`emitChange()`, `emitStatusChange()`) or toolbar navigation.
 
 `ready` is the thing to wait on. It resolves after the view reaches a terminal state (rows
 rendered, or an empty/error state shown), after any `filter=`/`expand=` parameter has been

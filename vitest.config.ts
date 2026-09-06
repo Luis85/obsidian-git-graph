@@ -11,6 +11,9 @@ export default defineConfig({
 	},
 	test: {
 		testTimeout: 20000,
+		// The git fixture beforeAll hooks in tests/plugin and tests/git each spawn ~15 git
+		// processes and have exceeded the 10s default hookTimeout under machine load.
+		hookTimeout: 30000,
 		coverage: {
 			provider: 'v8',
 			include: ['src/**/*.{ts,vue}'],

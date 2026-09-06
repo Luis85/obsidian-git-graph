@@ -272,6 +272,87 @@ describe('createGraphStore', () => {
 		expect(store.state.dirtyCount).toBe(1);
 	});
 
+	it('clears statusError on a successful statusFiles() read while the changes row is expanded', async () => {
+		const reader = new FakeReader();
+		reader.commits = linear(1);
+		reader.changed = 2;
+		reader.dirtyFiles = [{ path: 'a.md', status: 'M' }, { path: 'b.md', status: 'A' }];
+		const store = createGraphStore({ reader, settings: settings() });
+		await store.load();
+		reader.failStatus = new Error('fatal: index locked');
+		await store.refreshStatus();
+		expect(store.state.statusError).toBe('fatal: index locked');
+		await store.toggleDirty();
+		expect(store.state.dirtyExpanded).toBe(true);
+		expect(store.state.dirtyFiles).toHaveLength(2);
+		expect(store.state.statusError).toBeNull();
+		await store.refreshStatus();
+		expect(store.state.statusError).toBeNull();
+		expect(reader.statusCalls).toBe(2);
+	});
+
+	it('applies the count of a load whose status read started while expanded but landed after a collapse', async () => {
+		const reader = new FakeReader();
+		reader.commits = linear(1);
+		reader.changed = 2;
+		reader.dirtyFiles = [{ path: 'a.md', status: 'M' }, { path: 'b.md', status: 'A' }];
+		const store = createGraphStore({ reader, settings: settings() });
+		await store.load();
+		await store.toggleDirty();
+		reader.deferStatusFiles = true;
+		const reload = store.load();
+		await store.toggleDirty();
+		reader.pendingStatusFiles[0]?.([{ path: 'a.md', status: 'M' }]);
+		await reload;
+		expect(store.state.dirtyExpanded).toBe(false);
+		expect(store.state.dirtyFiles).toBeNull();
+		expect(store.state.dirtyCount).toBe(1);
+	});
+
+	it('lets the newest of two overlapping status reads win, whichever settles first', async () => {
+		const reader = new FakeReader();
+		reader.commits = linear(1);
+		reader.changed = 1;
+		const store = createGraphStore({ reader, settings: settings() });
+		await store.load();
+		reader.deferStatus = true;
+		const older = store.refreshStatus();
+		const newer = store.refreshStatus();
+		reader.pendingStatus[1]?.(5);
+		await newer;
+		expect(store.state.dirtyCount).toBe(5);
+		reader.pendingStatus[0]?.(3);
+		await older;
+		expect(store.state.dirtyCount).toBe(5);
+		reader.deferStatus = false;
+		reader.dirtyFiles = [{ path: 'a.md', status: 'M' }];
+		await store.toggleDirty();
+		reader.deferStatusFiles = true;
+		const olderFiles = store.refreshStatus();
+		const newerFiles = store.refreshStatus();
+		reader.pendingStatusFiles[1]?.([{ path: 'a.md', status: 'M' }, { path: 'b.md', status: 'A' }]);
+		await newerFiles;
+		reader.pendingStatusFiles[0]?.([{ path: 'a.md', status: 'M' }]);
+		await olderFiles;
+		expect(store.state.dirtyCount).toBe(2);
+		expect(store.state.dirtyFiles?.map((f) => f.path)).toEqual(['a.md', 'b.md']);
+	});
+
+	it('reports a failed file read in the details block while expanded, not in the banner', async () => {
+		const reader = new FakeReader();
+		reader.commits = linear(1);
+		reader.changed = 1;
+		reader.dirtyFiles = [{ path: 'a.md', status: 'M' }];
+		const store = createGraphStore({ reader, settings: settings() });
+		await store.load();
+		await store.toggleDirty();
+		reader.statusFiles = () => Promise.reject(new Error('fatal: cannot read index'));
+		await store.refreshStatus();
+		expect(store.state.dirtyExpanded).toBe(true);
+		expect(store.state.dirtyError).toBe('fatal: cannot read index');
+		expect(store.state.statusError).toBeNull();
+	});
+
 	it('ignores results that arrive after dispose', async () => {
 		const reader = new FakeReader();
 		reader.deferLog = true;

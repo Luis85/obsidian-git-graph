@@ -184,6 +184,28 @@ test('an expand= that matches nothing fails loudly instead of rendering a plausi
 	expect(errors.some((t) => t.includes('no-such-commit'))).toBe(true);
 });
 
+test('the harness toast shows what a file click would open and clears on the next change', async ({ page }) => {
+	await open(page, 'scenario=merge');
+	const toast = page.locator('.harness-toast');
+	await expect(toast).toBeHidden();
+	await page.locator('.git-graph-row').first().click();
+	await page.locator('.git-graph-file-link').first().click();
+	await expect(toast).toBeVisible();
+	await expect(toast).toHaveText(/^Would open .+/);
+	await page.locator('#harness-emit').click();
+	await expect(toast).toBeHidden();
+});
+
+test('a deleted file in the dirty changes row is muted and cannot be opened', async ({ page }) => {
+	await open(page, 'scenario=dirty');
+	await page.locator('.git-graph-row-dirty').click();
+	const deleted = page.locator('.git-graph-dirty-details .git-graph-file-deleted');
+	await expect(deleted).toHaveCount(1);
+	await expect(deleted).toHaveAttribute('title', /cannot be opened/);
+	await deleted.click();
+	expect(await page.evaluate(() => window.__harness.opened)).toHaveLength(0);
+});
+
 test('the toolbar lists every scenario and navigates when one is picked', async ({ page }) => {
 	await open(page, 'scenario=merge');
 	const count = await page.evaluate(() => window.__harness.scenarios.length);

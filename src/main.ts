@@ -6,6 +6,7 @@ import { GitRepository } from './git/GitRepository';
 import { GitGraphSettingTab } from './settings/GitGraphSettingTab';
 import { DEFAULT_SETTINGS, normalizeSettings, type GitGraphSettings } from './settings/types';
 import { createEmitter } from './util/emitter';
+import { realPath } from './util/paths';
 import { GIT_GRAPH_ICON, GIT_GRAPH_VIEW, GitGraphView, type ViewHost } from './view/GitGraphView';
 import type { RepoState } from './view/repoState';
 import { createGitWatcher, type GitWatcher } from './watch/gitWatcher';
@@ -173,12 +174,19 @@ export default class GitGraphPlugin extends Plugin implements ViewHost {
 		if (this.openViews === 0) this.watcher?.pause();
 	}
 
-	/** Opens a repository-relative path in the current leaf when it lives inside this vault. */
+	/**
+	 * Opens a repository-relative path in the current leaf when it lives inside this vault.
+	 * Both the vault base path and the repository root are canonicalized first, so a vault
+	 * opened through a symlink or junction resolves to the same directory git reports.
+	 */
 	openFile(path: string): void {
 		const state = this.repoState.value;
 		const adapter = this.app.vault.adapter;
 		if (state.kind !== 'ready' || !(adapter instanceof FileSystemAdapter)) return;
-		const vaultRelative = relative(adapter.getBasePath(), resolve(state.root, path)).replaceAll('\\', '/');
+		const vaultRelative = relative(realPath(adapter.getBasePath()), resolve(realPath(state.root), path)).replaceAll(
+			'\\',
+			'/',
+		);
 		if (vaultRelative.startsWith('..') || isAbsolute(vaultRelative)) {
 			void new Notice(`Git graph: ${path} is outside this vault.`);
 			return;

@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { GitRepository } from '../../src/git/GitRepository';
-import { createFixtureRepo, type FixtureRepo } from '../helpers/fixtureRepo';
+import { createEmptyRepo, createFixtureRepo, type FixtureRepo } from '../helpers/fixtureRepo';
 
 let fixture: FixtureRepo;
 let repo: GitRepository;
@@ -95,51 +95,34 @@ describe('log', () => {
 	});
 
 	it('returns [] for a repository with no commits', async () => {
-		const empty = mkdtempSync(join(tmpdir(), 'git-graph-empty-'));
+		const empty = createEmptyRepo('git-graph-empty-');
 		try {
-			execFileSync('git', ['init', '-q', '-b', 'main'], { cwd: empty });
-			const emptyRepo = new GitRepository({ gitPath: 'git', cwd: empty });
+			const emptyRepo = new GitRepository({ gitPath: 'git', cwd: empty.dir });
 			expect(await emptyRepo.log({ skip: 0, count: 10, refs: 'auto' })).toEqual([]);
 			expect(await emptyRepo.log({ skip: 0, count: 10, refs: 'all' })).toEqual([]);
 		} finally {
-			rmSync(empty, { recursive: true, force: true });
+			empty.dispose();
 		}
 	});
 
 	it('refs=all still returns real commits when HEAD is an unborn/orphan branch', async () => {
-		const dir = realpathSync.native(mkdtempSync(join(tmpdir(), 'git-graph-orphan-')));
+		const tmp = createEmptyRepo('git-graph-orphan-');
 		try {
-			const git = (...args: string[]): string =>
-				execFileSync('git', args, {
-					cwd: dir,
-					encoding: 'utf8',
-					env: {
-						...process.env,
-						GIT_AUTHOR_NAME: 'Ann Author',
-						GIT_AUTHOR_EMAIL: 'ann@example.com',
-						GIT_COMMITTER_NAME: 'Cara Committer',
-						GIT_COMMITTER_EMAIL: 'cara@example.com',
-						GIT_AUTHOR_DATE: '2026-09-01T10:00:00+02:00',
-						GIT_COMMITTER_DATE: '2026-09-01T10:00:00+02:00',
-					},
-				}).trim();
+			writeFileSync(join(tmp.dir, 'note.md'), '# note\n');
+			tmp.git('add', '.');
+			tmp.git('commit', '-q', '-m', 'Root commit');
+			const root = tmp.git('rev-parse', 'HEAD');
 
-			git('init', '-q', '-b', 'main');
-			writeFileSync(join(dir, 'note.md'), '# note\n');
-			git('add', '.');
-			git('commit', '-q', '-m', 'Root commit');
-			const root = git('rev-parse', 'HEAD');
+			tmp.git('checkout', '-q', '--orphan', 'other');
 
-			git('checkout', '-q', '--orphan', 'other');
-
-			const orphanRepo = new GitRepository({ gitPath: 'git', cwd: dir });
+			const orphanRepo = new GitRepository({ gitPath: 'git', cwd: tmp.dir });
 			const all = await orphanRepo.log({ skip: 0, count: 10, refs: 'all' });
 			expect(all.map((c) => c.hash)).toEqual([root]);
 
 			const auto = await orphanRepo.log({ skip: 0, count: 10, refs: 'auto' });
 			expect(auto).toEqual([]);
 		} finally {
-			rmSync(dir, { recursive: true, force: true });
+			tmp.dispose();
 		}
 	});
 });
@@ -171,6 +154,23 @@ describe('status', () => {
 	it('lists the changed files with their status', async () => {
 		const files = await repo.statusFiles();
 		expect(files).toEqual(expect.arrayContaining([{ path: 'x.txt', status: 'A' }, { path: 'renamed.md', status: 'M' }]));
+	});
+});
+
+describe('statusFiles', () => {
+	it('reports a staged rename with its old path, from a fresh repository', async () => {
+		const tmp = createEmptyRepo('git-graph-rename-');
+		try {
+			writeFileSync(join(tmp.dir, 'old.md'), 'x\n');
+			tmp.git('add', '.');
+			tmp.git('commit', '-q', '-m', 'Add old.md');
+			tmp.git('mv', 'old.md', 'new.md');
+			const fresh = new GitRepository({ gitPath: 'git', cwd: tmp.dir });
+			expect(await fresh.statusFiles()).toEqual([{ path: 'new.md', status: 'R', oldPath: 'old.md' }]);
+			expect((await fresh.status()).changed).toBe(1);
+		} finally {
+			tmp.dispose();
+		}
 	});
 });
 

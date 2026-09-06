@@ -1,7 +1,13 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync, watch, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+vi.mock('node:fs', async (importOriginal) => {
+	const actual = await importOriginal<typeof import('node:fs')>();
+	return { ...actual, watch: vi.fn(actual.watch) };
+});
+
 import { createGitWatcher, type GitWatcher } from '../../src/watch/gitWatcher';
 
 let gitDir: string;
@@ -32,6 +38,9 @@ describe('createGitWatcher', () => {
 		await settle();
 		writeFileSync(join(gitDir, 'HEAD'), 'ref: refs/heads/other\n');
 		writeFileSync(join(gitDir, 'refs', 'heads', 'main'), 'abc\n');
+		await vi.waitFor(() => expect(onChange).toHaveBeenCalledTimes(1), { timeout: 2000 });
+		// The waitFor above already observed the first call, so this trailing settle
+		// cannot false-fail; it proves the two events coalesced into one call.
 		await settle();
 		expect(onChange).toHaveBeenCalledTimes(1);
 	});
@@ -41,8 +50,7 @@ describe('createGitWatcher', () => {
 		watcher = createGitWatcher(gitDir, onChange, { debounceMs: 50 });
 		await settle();
 		writeFileSync(join(gitDir, 'refs', 'heads', 'feature'), 'def\n');
-		await settle();
-		expect(onChange).toHaveBeenCalledTimes(1);
+		await vi.waitFor(() => expect(onChange).toHaveBeenCalledTimes(1), { timeout: 2000 });
 	});
 
 	it('drops events while paused and fires once on resume if anything was dropped', async () => {
@@ -86,15 +94,35 @@ describe('createGitWatcher', () => {
 			watcher = createGitWatcher(gitDir, onChange, { debounceMs: 50, commonDir: common });
 			await settle();
 			writeFileSync(join(common, 'refs', 'heads', 'shared'), 'abc\n');
+			await vi.waitFor(() => expect(onChange).toHaveBeenCalledTimes(1), { timeout: 2000 });
 			await settle();
 			expect(onChange).toHaveBeenCalledTimes(1);
 			writeFileSync(join(common, 'packed-refs'), '# pack-refs\n');
-			await settle();
-			expect(onChange).toHaveBeenCalledTimes(2);
+			await vi.waitFor(() => expect(onChange).toHaveBeenCalledTimes(2), { timeout: 2000 });
 		} finally {
 			watcher?.dispose();
 			watcher = null;
 			rmSync(common, { recursive: true, force: true });
+		}
+	});
+
+	it('does not watch the git dir twice when commonDir is the same directory under another spelling', async () => {
+		const watchesFor = (commonDir?: string): number => {
+			vi.mocked(watch).mockClear();
+			const w = createGitWatcher(gitDir, () => undefined, commonDir === undefined ? {} : { commonDir });
+			const n = vi.mocked(watch).mock.calls.length;
+			w.dispose();
+			return n;
+		};
+		const plain = watchesFor();
+		expect(plain).toBeGreaterThan(0);
+		const link = join(realpathSync.native(tmpdir()), `git-graph-watch-link-${process.pid}`);
+		symlinkSync(gitDir, link, 'junction');
+		try {
+			expect(watchesFor(link)).toBe(plain);
+			if (process.platform === 'win32') expect(watchesFor(gitDir.toUpperCase())).toBe(plain);
+		} finally {
+			rmSync(link, { force: true });
 		}
 	});
 });

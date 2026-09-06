@@ -8,6 +8,7 @@ changes. Click a commit to see its full message and changed files.
 Read-only: the plugin never runs a git command that modifies the repository. Click a file in
 an expanded commit to open it in the editor (files outside the vault or no longer present show
 a notice). Click the changes row to see the uncommitted files; click a file to open it.
+Deleted files are shown struck through and cannot be opened.
 
 ## Requirements
 
@@ -90,9 +91,3 @@ scenario and theme into `screenshots/`, and `npm run test:e2e` runs the Playwrig
 part of `npm run check`; run `test:e2e` before merging a change to `src/view/**` or
 `styles/**`. See [`harness/README.md`](harness/README.md) for the scenarios, the URL
 parameters and the `window.__harness` API.
-
-## Known limitations
-
-- A vault opened through a symlink or junction may report its files as outside the vault
-  when opening a file from the graph, since the repository root and the vault's base path
-  can resolve to different (non-symlinked) paths.

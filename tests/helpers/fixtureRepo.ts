@@ -3,6 +3,30 @@ import { mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
+const FIXTURE_ENV = {
+	GIT_AUTHOR_NAME: 'Ann Author',
+	GIT_AUTHOR_EMAIL: 'ann@example.com',
+	GIT_COMMITTER_NAME: 'Cara Committer',
+	GIT_COMMITTER_EMAIL: 'cara@example.com',
+	GIT_AUTHOR_DATE: '2026-09-01T10:00:00+02:00',
+	GIT_COMMITTER_DATE: '2026-09-01T10:00:00+02:00',
+};
+
+export interface EmptyRepo {
+	dir: string;
+	git: (...args: string[]) => string;
+	dispose(): void;
+}
+
+/** A fresh `git init -b main` in a canonical temp dir, with the fixture's deterministic identity and dates. */
+export function createEmptyRepo(prefix = 'git-graph-tmp-'): EmptyRepo {
+	const dir = realpathSync.native(mkdtempSync(join(tmpdir(), prefix)));
+	const git = (...args: string[]): string => execFileSync('git', args, { cwd: dir, encoding: 'utf8', env: { ...process.env, ...FIXTURE_ENV } }).trim();
+	git('init', '-q', '-b', 'main');
+	git('config', 'core.autocrlf', 'false');
+	return { dir, git, dispose: () => rmSync(dir, { recursive: true, force: true }) };
+}
+
 export interface FixtureRepo {
 	dir: string;
 	hashes: Record<'root' | 'second' | 'feature' | 'merge' | 'tip', string>;
@@ -20,24 +44,7 @@ export interface FixtureRepo {
  * and main has an upstream.
  */
 export function createFixtureRepo(): FixtureRepo {
-	const dir = realpathSync.native(mkdtempSync(join(tmpdir(), 'git-graph-fixture-')));
-	const git = (...args: string[]): string =>
-		execFileSync('git', args, {
-			cwd: dir,
-			encoding: 'utf8',
-			env: {
-				...process.env,
-				GIT_AUTHOR_NAME: 'Ann Author',
-				GIT_AUTHOR_EMAIL: 'ann@example.com',
-				GIT_COMMITTER_NAME: 'Cara Committer',
-				GIT_COMMITTER_EMAIL: 'cara@example.com',
-				GIT_AUTHOR_DATE: '2026-09-01T10:00:00+02:00',
-				GIT_COMMITTER_DATE: '2026-09-01T10:00:00+02:00',
-			},
-		}).trim();
-
-	git('init', '-q', '-b', 'main');
-	git('config', 'core.autocrlf', 'false');
+	const { dir, git, dispose } = createEmptyRepo('git-graph-fixture-');
 	writeFileSync(join(dir, 'note.md'), '# note\n');
 	git('add', '.');
 	git('commit', '-q', '-m', 'Root commit');
@@ -72,7 +79,7 @@ export function createFixtureRepo(): FixtureRepo {
 		dir,
 		hashes: { root, second, feature, merge, tip },
 		dispose: () => {
-			rmSync(dir, { recursive: true, force: true });
+			dispose();
 			rmSync(remote, { recursive: true, force: true });
 		},
 	};
