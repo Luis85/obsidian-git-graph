@@ -25,8 +25,13 @@ export function headings(text) {
 	const found = [];
 	let offset = 0;
 	let fence = null;
-	for (const line of text.split('\n')) {
-		const open = /^ {0,3}(`{3,}|~{3,})/.exec(line);
+	for (const raw of text.split('\n')) {
+		// A CRLF document (a Windows checkout with autocrlf) leaves a `\r` on every line. It
+		// is dropped for matching only — `.` never matches it, so `## Text\r` would otherwise
+		// not be a heading — while `offset` still counts it, so `index` stays an exact slice
+		// position into the original text.
+		const line = raw.endsWith('\r') ? raw.slice(0, -1) : raw;
+		const open =/^ {0,3}(`{3,}|~{3,})/.exec(line);
 		if (fence) {
 			// A fence closes only on the same character, at least as long as the one that
 			// opened it — so a ``` inside a ~~~ block does not end it.
@@ -44,7 +49,7 @@ export function headings(text) {
 				found.push({ text: (atx[1] ?? '').replace(/[ \t]+#+$/, '').trim(), index: offset });
 			}
 		}
-		offset += line.length + 1;
+		offset += raw.length + 1;
 	}
 	return found;
 }

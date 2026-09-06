@@ -58,7 +58,7 @@ describe('each changelog section groups its bullets once', () => {
 		const repeated: string[] = [];
 		for (const [at, section] of all.entries()) {
 			const body = changelog.slice(section.index, all[at + 1]?.index ?? changelog.length);
-			const groups = [...body.matchAll(/^ {0,3}### +(.+?)[ \t]*$/gm)].map((m) => m[1] ?? '');
+			const groups = [...body.matchAll(/^ {0,3}### +(.+?)[ \t]*\r?$/gm)].map((m) => m[1] ?? '');
 			const seen = new Set<string>();
 			for (const group of groups) {
 				if (seen.has(group)) repeated.push(`${section.text} → ### ${group}`);

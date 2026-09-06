@@ -84,4 +84,12 @@ describe('headings', () => {
 		const doc = 'intro\n## Two\nbody\n';
 		expect(doc.slice(scan(doc)[0]?.index)).toBe('## Two\nbody\n');
 	});
+
+	it('reads a CRLF document (a Windows checkout with autocrlf) with exact offsets and no stray carriage return', () => {
+		const doc = '# One\r\n## [Unreleased]\r\n\r\n## [0.1.0] - 2026-09-06\r\n### Added\r\n- a\r\n';
+		const found = scan(doc);
+		expect(found.map((h) => h.text)).toEqual(['[Unreleased]', '[0.1.0] - 2026-09-06']);
+		expect(doc.slice(found[1]?.index)).toBe('## [0.1.0] - 2026-09-06\r\n### Added\r\n- a\r\n');
+		expect(changelogNotes(doc, '0.1.0')).toBe('### Added\r\n- a');
+	});
 });
