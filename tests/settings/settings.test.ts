@@ -31,6 +31,8 @@ describe('normalizeSettings', () => {
 		expect(normalizeSettings({ gitPath: 'git.exe' }).gitPath).toBe('git.exe');
 		expect(normalizeSettings({ gitPath: 'C:\\Git\\bin\\git.exe' }).gitPath).toBe('C:\\Git\\bin\\git.exe');
 		expect(normalizeSettings({ gitPath: '/usr/bin/git' }).gitPath).toBe('/usr/bin/git');
+		expect(normalizeSettings({ gitPath: '\\\\server\\share\\git.exe' }).gitPath).toBe('\\\\server\\share\\git.exe');
+		expect(normalizeSettings({ gitPath: 'C:git.exe' }).gitPath).toBe('git');
 		expect(isValidGitPath('../git')).toBe(false);
 	});
 });

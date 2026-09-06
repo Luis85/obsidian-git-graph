@@ -1,4 +1,3 @@
-import { isAbsolute } from 'node:path';
 import type { RefFilter } from '../git/types';
 
 export type DateFormat = 'relative' | 'absolute';
@@ -22,11 +21,19 @@ export const DEFAULT_SETTINGS: GitGraphSettings = {
 export const MIN_PAGE_SIZE = 10;
 export const MAX_PAGE_SIZE = 5000;
 
+/** Absolute on Windows (drive letter or UNC) or POSIX; keeps this module free of Node built-ins for the browser harness. */
+const ABSOLUTE_PATH = /^(?:[A-Za-z]:[/\\]|\\\\|\/)/;
+
 /** A bare command (looked up on PATH) or an absolute path; relative paths would resolve inside the vault. */
 export function isValidGitPath(value: string): boolean {
 	const trimmed = value.trim();
 	if (trimmed.length === 0) return false;
-	return !/[\\/]/.test(trimmed) || isAbsolute(trimmed);
+	// Reject drive-relative paths like C:git.exe
+	if (/^[A-Za-z]:(?![/\\])/.test(trimmed)) return false;
+	// Accept bare commands (no slashes)
+	if (!/[\\/]/.test(trimmed)) return true;
+	// Accept absolute paths (Windows drive absolute, UNC, or POSIX)
+	return ABSOLUTE_PATH.test(trimmed);
 }
 
 export function normalizeSettings(raw: unknown): GitGraphSettings {
