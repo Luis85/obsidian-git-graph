@@ -205,9 +205,10 @@ describe('createGraphStore', () => {
 		reader.changed = 1;
 		const store = createGraphStore({ reader, settings: settings() });
 		await store.load();
+		reader.commits = linear(3);
 		reader.failStatus = new Error('fatal: index locked');
 		await store.load();
-		expect(store.state.rows).toHaveLength(2);
+		expect(store.state.rows.map((r) => r.hash)).toEqual(['c1', 'c2', 'c3']);
 		expect(store.state.dirtyCount).toBe(1);
 		expect(store.state.error).toBe('fatal: index locked');
 	});
