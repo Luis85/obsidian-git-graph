@@ -16,7 +16,7 @@ export default defineConfig({
 				extends: true,
 				test: {
 					name: 'dom',
-					include: ['tests/view/**', 'tests/plugin/**', 'tests/settings/**'],
+					include: ['tests/view/**', 'tests/plugin/**', 'tests/settings/**', 'tests/watch/**'],
 					environment: 'jsdom',
 				},
 			},
@@ -25,7 +25,7 @@ export default defineConfig({
 				test: {
 					name: 'node',
 					include: ['tests/**/*.test.ts'],
-					exclude: ['tests/view/**', 'tests/plugin/**', 'tests/settings/**'],
+					exclude: ['tests/view/**', 'tests/plugin/**', 'tests/settings/**', 'tests/watch/**'],
 					environment: 'node',
 				},
 			},

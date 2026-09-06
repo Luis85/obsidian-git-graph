@@ -23,7 +23,9 @@ const DIRECT_RENAME_FILES = new Set(['HEAD', 'packed-refs', 'index']);
 export function createGitWatcher(gitDir: string, onChange: () => void, opts: GitWatcherOptions = {}): GitWatcher {
 	const debounceMs = opts.debounceMs ?? 500;
 	const watchers: FSWatcher[] = [];
-	let timer: ReturnType<typeof setTimeout> | null = null;
+	// Runs in Obsidian's Electron renderer, so timers go through `window` per the
+	// obsidianmd popout-window rule (obsidianmd/prefer-window-timers).
+	let timer: number | null = null;
 	let paused = false;
 	let dropped = false;
 	let disposed = false;
@@ -41,8 +43,8 @@ export function createGitWatcher(gitDir: string, onChange: () => void, opts: Git
 			dropped = true;
 			return;
 		}
-		if (timer !== null) clearTimeout(timer);
-		timer = setTimeout(() => {
+		if (timer !== null) window.clearTimeout(timer);
+		timer = window.setTimeout(() => {
 			timer = null;
 			onChange();
 		}, debounceMs);
@@ -90,7 +92,7 @@ export function createGitWatcher(gitDir: string, onChange: () => void, opts: Git
 		pause() {
 			paused = true;
 			if (timer !== null) {
-				clearTimeout(timer);
+				window.clearTimeout(timer);
 				timer = null;
 				dropped = true;
 			}
@@ -104,7 +106,7 @@ export function createGitWatcher(gitDir: string, onChange: () => void, opts: Git
 		},
 		dispose() {
 			disposed = true;
-			if (timer !== null) clearTimeout(timer);
+			if (timer !== null) window.clearTimeout(timer);
 			for (const w of watchers) w.close();
 			watchers.length = 0;
 		},
