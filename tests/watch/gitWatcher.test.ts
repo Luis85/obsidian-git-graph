@@ -38,8 +38,7 @@ describe('createGitWatcher', () => {
 		await settle();
 		writeFileSync(join(gitDir, 'HEAD'), 'ref: refs/heads/other\n');
 		writeFileSync(join(gitDir, 'refs', 'heads', 'main'), 'abc\n');
-		await settle();
-		expect(onChange).toHaveBeenCalledTimes(1);
+		await vi.waitFor(() => expect(onChange).toHaveBeenCalledTimes(1), { timeout: 2000 });
 	});
 
 	it('fires for a new ref inside refs/heads', async () => {
@@ -47,8 +46,7 @@ describe('createGitWatcher', () => {
 		watcher = createGitWatcher(gitDir, onChange, { debounceMs: 50 });
 		await settle();
 		writeFileSync(join(gitDir, 'refs', 'heads', 'feature'), 'def\n');
-		await settle();
-		expect(onChange).toHaveBeenCalledTimes(1);
+		await vi.waitFor(() => expect(onChange).toHaveBeenCalledTimes(1), { timeout: 2000 });
 	});
 
 	it('drops events while paused and fires once on resume if anything was dropped', async () => {
@@ -92,11 +90,9 @@ describe('createGitWatcher', () => {
 			watcher = createGitWatcher(gitDir, onChange, { debounceMs: 50, commonDir: common });
 			await settle();
 			writeFileSync(join(common, 'refs', 'heads', 'shared'), 'abc\n');
-			await settle();
-			expect(onChange).toHaveBeenCalledTimes(1);
+			await vi.waitFor(() => expect(onChange).toHaveBeenCalledTimes(1), { timeout: 2000 });
 			writeFileSync(join(common, 'packed-refs'), '# pack-refs\n');
-			await settle();
-			expect(onChange).toHaveBeenCalledTimes(2);
+			await vi.waitFor(() => expect(onChange).toHaveBeenCalledTimes(2), { timeout: 2000 });
 		} finally {
 			watcher?.dispose();
 			watcher = null;

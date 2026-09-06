@@ -93,6 +93,9 @@ export function createStatusSync(deps: StatusSyncDeps): StatusSync {
 		if (deps.isDisposed() || !deps.showDirtyRow()) return;
 		const gen = deps.currentGeneration();
 		const read = await fetch();
+		// Defensive: apply()'s own seq check already drops a read superseded by a newer refresh
+		// request, so this gen check is redundant against that case but still guards a store
+		// swap (a new generation) that happened while this read was in flight.
 		if (gen !== deps.currentGeneration() || deps.isDisposed()) return;
 		apply(read);
 	}

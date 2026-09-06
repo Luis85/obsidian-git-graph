@@ -1,7 +1,6 @@
-// Imported as a namespace (rather than destructured) so that `fs.watch` is looked up at call
-// time: a destructured `{ watch }` binding to this built-in module can end up pinned to the
-// pre-mock implementation across a module boundary when a test replaces `watch` via
-// `vi.mock('node:fs', ...)`, which the gitWatcher tests rely on to count `watch` calls.
+// Imported as a namespace (rather than destructured): in the watcher and plugin tests, the
+// `vi.mock('node:fs', ...)` replacing `fs.watch`/`fs.existsSync` was only observed to take effect
+// through a namespace import. Using `fs.watch`/`fs.existsSync` here keeps that mock working.
 import * as fs from 'node:fs';
 import { join } from 'node:path';
 import { samePath } from '../util/paths';

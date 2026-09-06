@@ -25,7 +25,20 @@ describe('paths', () => {
 		try {
 			expect(samePath(short, canonical)).toBe(true);
 			expect(samePath(link, canonical)).toBe(true);
-			expect(samePath(canonical.toUpperCase(), canonical)).toBe(process.platform === 'win32');
+			// Windows is always case-insensitive here. Elsewhere (e.g. macOS's default case-insensitive
+			// APFS), realpath restores the on-disk case, so the upper-cased spelling can also canonicalize
+			// equal to `canonical`; assert against what realpath actually reports instead of a fixed value.
+			if (process.platform === 'win32') {
+				expect(samePath(canonical.toUpperCase(), canonical)).toBe(true);
+			} else {
+				let upperResolvesToCanonical: boolean;
+				try {
+					upperResolvesToCanonical = realpathSync.native(canonical.toUpperCase()) === canonical;
+				} catch {
+					upperResolvesToCanonical = false;
+				}
+				expect(samePath(canonical.toUpperCase(), canonical)).toBe(upperResolvesToCanonical);
+			}
 			expect(samePath(other, canonical)).toBe(false);
 		} finally {
 			rmSync(link, { force: true });

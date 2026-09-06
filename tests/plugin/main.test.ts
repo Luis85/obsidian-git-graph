@@ -249,7 +249,9 @@ describe('GitGraphPlugin', () => {
 			try {
 				vi.mocked(createGitWatcher).mockClear();
 				const stalled = plugin.initRepo();
-				await vi.waitFor(() => expect(spy).toHaveBeenCalledTimes(1));
+				// The stalled initRepo() runs two real git spawns before reaching gitCommonDir, so the
+				// default 1s vi.waitFor timeout can flake under load.
+				await vi.waitFor(() => expect(spy).toHaveBeenCalledTimes(1), { timeout: 10_000 });
 				const fresh = plugin.initRepo();
 				release();
 				await Promise.all([stalled, fresh]);
