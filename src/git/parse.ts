@@ -4,7 +4,9 @@ export const FIELD_SEP = '\x1f';
 const RECORD_SEP = '\0';
 
 export const LOG_FORMAT = '%H%x1f%P%x1f%an%x1f%ae%x1f%aI%x1f%s';
-export const REF_FORMAT = '%(objectname)%x1f%(*objectname)%x1f%(refname)%x1f%(upstream:short)%x1f%(HEAD)';
+// Note: for-each-ref's --format uses bare %NN hex escapes (e.g. %1f), unlike the %xNN escapes
+// accepted by log/show pretty-format; %x1f here would be emitted as the literal text "%x1f".
+export const REF_FORMAT = '%(objectname)%1f%(*objectname)%1f%(refname)%1f%(upstream:short)%1f%(HEAD)';
 export const SHOW_FORMAT = '%H%x1f%an%x1f%ae%x1f%aI%x1f%cn%x1f%cI%x1f%B';
 
 export function parseLog(stdout: string): Commit[] {
