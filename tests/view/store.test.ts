@@ -165,12 +165,12 @@ describe('createGraphStore', () => {
 		expect(reader.statusCalls).toBe(2);
 		reader.failStatus = new Error('fatal: status failed');
 		await store.refreshStatus();
-		expect(store.state.error).toBe('fatal: status failed');
+		expect(store.state.statusError).toBe('fatal: status failed');
 		reader.failStatus = null;
 		reader.changed = 7;
 		await store.refreshStatus();
 		expect(store.state.dirtyCount).toBe(7);
-		expect(store.state.error).toBeNull();
+		expect(store.state.statusError).toBeNull();
 	});
 
 	it('refreshStatus is a no-op when the dirty row is off or after dispose', async () => {
@@ -210,7 +210,23 @@ describe('createGraphStore', () => {
 		await store.load();
 		expect(store.state.rows.map((r) => r.hash)).toEqual(['c1', 'c2', 'c3']);
 		expect(store.state.dirtyCount).toBe(1);
-		expect(store.state.error).toBe('fatal: index locked');
+		expect(store.state.statusError).toBe('fatal: index locked');
+		expect(store.state.error).toBeNull();
+	});
+
+	it('keeps a load error after a later successful refreshStatus', async () => {
+		const reader = new FakeReader();
+		reader.commits = linear(2);
+		const store = createGraphStore({ reader, settings: settings() });
+		await store.load();
+		reader.failLog = new Error('fatal: bad object');
+		await store.load();
+		expect(store.state.error).toBe('fatal: bad object');
+		reader.changed = 3;
+		await store.refreshStatus();
+		expect(store.state.error).toBe('fatal: bad object');
+		expect(store.state.statusError).toBeNull();
+		expect(store.state.dirtyCount).toBe(3);
 	});
 
 	it('toggleDirty loads the working-tree files, collapses on the second call, and follows the dirty count', async () => {
@@ -237,6 +253,23 @@ describe('createGraphStore', () => {
 		await store.refreshStatus();
 		expect(store.state.dirtyExpanded).toBe(false);
 		expect(store.state.dirtyFiles).toBeNull();
+	});
+
+	it('refreshStatus calls statusFiles once (not status) while the changes row is expanded', async () => {
+		const reader = new FakeReader();
+		reader.commits = linear(1);
+		reader.changed = 2;
+		reader.dirtyFiles = [{ path: 'a.md', status: 'M' }, { path: 'b.md', status: 'A' }];
+		const store = createGraphStore({ reader, settings: settings() });
+		await store.load();
+		await store.toggleDirty();
+		const statusCallsBefore = reader.statusCalls;
+		const statusFilesCallsBefore = reader.statusFilesCalls;
+		reader.dirtyFiles = [{ path: 'a.md', status: 'M' }];
+		await store.refreshStatus();
+		expect(reader.statusCalls).toBe(statusCallsBefore);
+		expect(reader.statusFilesCalls).toBe(statusFilesCallsBefore + 1);
+		expect(store.state.dirtyCount).toBe(1);
 	});
 
 	it('ignores results that arrive after dispose', async () => {

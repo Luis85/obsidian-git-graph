@@ -44,6 +44,14 @@ describe('gitDir', () => {
 		expect((await repo.gitDir()).replaceAll('\\', '/').toLowerCase()).toBe(join(fixture.dir, '.git').replaceAll('\\', '/').toLowerCase());
 	});
 
+	it('reports the common dir as absolute from a subdirectory cwd, without needing --path-format', async () => {
+		const sub = join(fixture.dir, 'sub');
+		mkdirSync(sub, { recursive: true });
+		const subRepo = new GitRepository({ gitPath: 'git', cwd: sub });
+		const common = (await subRepo.gitCommonDir()).replaceAll('\\', '/').toLowerCase();
+		expect(common).toBe(join(fixture.dir, '.git').replaceAll('\\', '/').toLowerCase());
+	});
+
 	it('reports the common dir, which differs for a linked worktree', async () => {
 		expect((await repo.gitCommonDir()).replaceAll('\\', '/').toLowerCase()).toBe((await repo.gitDir()).replaceAll('\\', '/').toLowerCase());
 		const wt = realpathSync.native(mkdtempSync(join(tmpdir(), 'git-graph-wt-')));

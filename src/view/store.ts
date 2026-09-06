@@ -14,6 +14,7 @@ export interface GraphState {
 	loading: boolean;
 	loadingMore: boolean;
 	error: string | null;
+	statusError: string | null;
 	commits: Commit[];
 	rows: Row[];
 	layout: LayoutState;
@@ -89,8 +90,10 @@ function collapseDirty(state: GraphState): void {
 
 /**
  * Builds `syncDirtyFiles(gen)`: re-reads the working-tree file list while the changes row is
- * expanded, and collapses the row once there is nothing left to show. A stale generation (a
- * newer load, or a dispose) drops the result, like the other fetches here.
+ * expanded, deriving `dirtyCount` from the file list itself (so this is the *only* status
+ * process run while expanded — see `fetchStatus` and `refreshStatus`), and collapses the row
+ * once there is nothing left to show. A stale generation (a newer load, or a dispose) drops
+ * the result, like the other fetches here.
  */
 function createDirtySync(deps: GraphStoreDeps, state: GraphState, currentGeneration: () => number, isDisposed: () => boolean): (gen: number) => Promise<void> {
 	return async function syncDirtyFiles(gen: number): Promise<void> {
@@ -102,6 +105,12 @@ function createDirtySync(deps: GraphStoreDeps, state: GraphState, currentGenerat
 		try {
 			const files = await deps.reader.statusFiles();
 			if (gen !== currentGeneration() || isDisposed() || !state.dirtyExpanded) return;
+			if (files.length === 0) {
+				state.dirtyCount = 0;
+				collapseDirty(state);
+				return;
+			}
+			state.dirtyCount = files.length;
 			state.dirtyFiles = files;
 			state.dirtyError = null;
 		} catch (e) {
@@ -127,14 +136,19 @@ function createDirtyToggler(state: GraphState, syncDirtyFiles: (gen: number) => 
 
 type StatusResult = { ok: true; changed: number } | { ok: false; error: string };
 
-/** Fetches status as a settled result: a rejection becomes `{ ok: false }` instead of failing the whole `load()`. */
-function fetchStatus(deps: GraphStoreDeps, showDirtyRow: boolean): Promise<StatusResult> {
-	return showDirtyRow
-		? deps.reader
-				.status()
-				.then((s) => ({ ok: true as const, changed: s.changed }))
-				.catch((e: unknown) => ({ ok: false as const, error: errorMessage(e) }))
-		: Promise.resolve({ ok: true as const, changed: 0 });
+/**
+ * Fetches status as a settled result: a rejection becomes `{ ok: false }` instead of failing the
+ * whole `load()`. While the changes row is expanded, `syncDirtyFiles` is the sole source of a
+ * fresh `dirtyCount` (derived from `statusFiles()`), so this resolves to the current count
+ * without running a second `git status` process.
+ */
+function fetchStatus(deps: GraphStoreDeps, state: GraphState, showDirtyRow: boolean): Promise<StatusResult> {
+	if (!showDirtyRow) return Promise.resolve({ ok: true as const, changed: 0 });
+	if (state.dirtyExpanded) return Promise.resolve({ ok: true as const, changed: state.dirtyCount });
+	return deps.reader
+		.status()
+		.then((s) => ({ ok: true as const, changed: s.changed }))
+		.catch((e: unknown) => ({ ok: false as const, error: errorMessage(e) }));
 }
 
 /** Applies a completed `load()`: rows/refs/head are replaced wholesale; a failed status keeps the previous `dirtyCount`. */
@@ -159,13 +173,17 @@ function applyLoad(
 	if (state.expandedHash !== null && !byHash.has(state.expandedHash)) collapse();
 	if (status.ok) {
 		state.dirtyCount = status.changed;
-		state.error = null;
+		state.statusError = null;
 	} else {
-		state.error = status.error;
+		state.statusError = status.error;
 	}
 }
 
-/** Builds `refreshStatus`: re-runs `status()` only, generation-guarded like `load()`, never touching `rows`. */
+/**
+ * Builds `refreshStatus`: re-runs the status step only, generation-guarded like `load()`, never
+ * touching `rows`. While the changes row is expanded, `statusFiles()` alone provides a fresh
+ * `dirtyCount` (via `syncDirtyFiles`), so `status()` is skipped rather than running both.
+ */
 function createStatusRefresher(
 	deps: GraphStoreDeps,
 	state: GraphState,
@@ -176,15 +194,18 @@ function createStatusRefresher(
 	return async function refreshStatus(): Promise<void> {
 		if (isDisposed() || !deps.settings().showDirtyRow) return;
 		const gen = currentGeneration();
+		if (state.dirtyExpanded) {
+			await syncDirtyFiles(gen);
+			return;
+		}
 		try {
 			const status = await deps.reader.status();
 			if (gen !== currentGeneration() || isDisposed()) return;
 			state.dirtyCount = status.changed;
-			state.error = null;
-			await syncDirtyFiles(gen);
+			state.statusError = null;
 		} catch (e) {
 			if (gen !== currentGeneration() || isDisposed()) return;
-			state.error = errorMessage(e);
+			state.statusError = errorMessage(e);
 		}
 	};
 }
@@ -194,6 +215,7 @@ export function createGraphStore(deps: GraphStoreDeps): GraphStore {
 		loading: false,
 		loadingMore: false,
 		error: null,
+		statusError: null,
 		commits: [],
 		rows: [],
 		layout: emptyLayoutState(),
@@ -242,11 +264,12 @@ export function createGraphStore(deps: GraphStoreDeps): GraphStore {
 			const [commits, refs, status] = await Promise.all([
 				deps.reader.log({ skip: 0, count, refs: refFilter }),
 				deps.reader.refs(),
-				fetchStatus(deps, showDirtyRow),
+				fetchStatus(deps, state, showDirtyRow),
 			]);
 			if (gen !== generation || disposed) return;
+			state.error = null;
 			applyLoad(state, byHash, { commits, refs, status, count }, collapse);
-			await syncDirtyFiles(gen);
+			void syncDirtyFiles(gen);
 		} catch (e) {
 			if (gen !== generation || disposed) return;
 			state.error = errorMessage(e);

@@ -21,6 +21,9 @@ and a dirty-working-tree row. Read-only in this version.
 | Graph layout | Own lane layout computed from `git log --topo-order` output, rendered as per-row inline SVG. |
 | minAppVersion | 1.13.0 |
 
+Superseded by user request (2026-09-06): changed files are clickable and open in the editor;
+the changes row expands to list working-tree files (`statusFiles()`).
+
 Rejected: parsing `git log --graph` ASCII (terminal look, unstable across page boundaries);
 a graph library such as `@gitgraph/js` (no virtualization or incremental append);
 isomorphic-git (mobile reach at the cost of fidelity and bundle size; may return as a
@@ -146,6 +149,8 @@ tree:
   upstream badge in accent color.
 - `CommitDetails.vue` shows full hash with copy button, author, absolute dates, full
   message, changed files with status letter. Files are not clickable.
+  (Superseded by user request (2026-09-06): changed files are clickable and open in the
+  editor; the changes row expands to list working-tree files (`statusFiles()`).)
 - `DirtyRow.vue` is the synthetic first row "N changes" with a dashed connector into HEAD's
   lane, shown when `status().changed > 0` and the setting is on.
 

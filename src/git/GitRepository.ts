@@ -1,3 +1,4 @@
+import { resolve } from 'node:path';
 import { GitError } from './GitError';
 import { LOG_FORMAT, REF_FORMAT, SHOW_FORMAT, countStatus, parseLog, parseNameStatus, parseRefs, parseShow, parseStatus } from './parse';
 import { runGit } from './runGit';
@@ -40,9 +41,15 @@ export class GitRepository implements GitReader {
 		return (await this.run(['rev-parse', '--absolute-git-dir'])).trim();
 	}
 
-	/** Shared git dir: same as gitDir() for a normal checkout, the main repository's .git for a linked worktree. */
+	/**
+	 * Shared git dir: same as gitDir() for a normal checkout, the main repository's .git for a
+	 * linked worktree. Deliberately avoids `--path-format=absolute` (git >= 2.31 only, per
+	 * gitrevisions(7)); a relative result is resolved against `cwd` instead, which works back to
+	 * git 2.5.
+	 */
 	async gitCommonDir(): Promise<string> {
-		return (await this.run(['rev-parse', '--path-format=absolute', '--git-common-dir'])).trim();
+		const out = (await this.run(['rev-parse', '--git-common-dir'])).trim();
+		return resolve(this.cwd, out);
 	}
 
 	async log(opts: { skip: number; count: number; refs: RefFilter }): Promise<Commit[]> {

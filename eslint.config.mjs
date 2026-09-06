@@ -130,7 +130,7 @@ export default defineConfig([
 	{
 		files: ['src/view/store.ts'],
 		rules: {
-			// TODO(quality): createGraphStore has 105 lines (limit 80). `toggleExpand`,
+			// TODO(quality): createGraphStore has 107 lines (limit 80). `toggleExpand`,
 			// `refreshStatus`, `syncDirtyFiles` and `toggleDirty` were already pulled out as
 			// standalone factories (createExpandToggler/createStatusRefresher/createDirtySync/
 			// createDirtyToggler), and `applyLoad`/`fetchStatus`/`collapseDirty` were pulled

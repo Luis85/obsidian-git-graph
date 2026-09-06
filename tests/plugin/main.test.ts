@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
@@ -214,6 +214,26 @@ describe('GitGraphPlugin', () => {
 			plugin.openFile('missing.md');
 			expect(Notice.shown.at(-1)).toContain('missing.md');
 			plugin.openFile('../outside.md');
+			expect(Notice.shown.at(-1)).toContain('outside this vault');
+			expect(app.workspace.opened).toHaveLength(1);
+			plugin.onunload();
+		});
+
+		it('opens a file from a sub-vault, and notices for a repo-root file outside it', async () => {
+			// Runs after the status-dependent tests in this file so it doesn't perturb their counts:
+			// the vault base here is a subfolder of the fixture, not the fixture root.
+			const sub = join(fixture.dir, 'sub');
+			mkdirSync(sub, { recursive: true });
+			const plugin = makePlugin(sub);
+			await plugin.onload();
+			await plugin.initRepo();
+			expect(plugin.repoState.value.kind).toBe('ready');
+			const app = plugin.app as unknown as App;
+			app.vault.files.set('a.md', { path: 'a.md' });
+			Notice.shown.length = 0;
+			plugin.openFile('sub/a.md');
+			expect(app.workspace.opened).toEqual(['a.md']);
+			plugin.openFile('README.md');
 			expect(Notice.shown.at(-1)).toContain('outside this vault');
 			expect(app.workspace.opened).toHaveLength(1);
 			plugin.onunload();

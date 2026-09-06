@@ -13,13 +13,15 @@ a notice). Click the changes row to see the uncommitted files; click a file to o
 
 - Obsidian 1.13 or newer, desktop only.
 - `git` installed. If it is not on your PATH, set the executable in the plugin settings.
+- git 2.13 or newer (`--absolute-git-dir` is used to resolve the repository's `.git` directory).
 
 ## Usage
 
 Open the pane from the ribbon icon, or from the command palette: **Git Graph: Open**.
 **Git Graph: Refresh** re-reads the repository on demand; the pane also refreshes on its
 own when the repository's git state changes (commits, branches, checkouts). Working-tree
-edits (unstaged/staged file changes) show up on the next refresh or git operation.
+edits (unstaged/staged file changes) refresh the changes row within about half a second
+while the pane is open; a git-state change still refreshes the whole graph.
 
 ## Settings
 
@@ -50,7 +52,7 @@ type-checks all of them; `build` and `test-build` call it instead of inlining `v
 | Typecheck | `npm run typecheck` | A type error anywhere under `src/**`, `tests/**`, `harness/**` or the root configs (strict, `noUncheckedIndexedAccess`). |
 | Build | `npm run build` | `typecheck`, or the vite build itself, failing. |
 | oxlint | `npm run lint:oxlint` | Any oxlint correctness/suspicious finding. |
-| eslint | `npm run lint:eslint` | Any obsidianmd/typescript-eslint/vue rule, at `--max-warnings 0` — including the size/complexity limits: `src/**` caps `max-lines` (300), `max-lines-per-function` (80), `complexity` (12), `max-depth` (4), `max-params` (5), `max-nested-callbacks` (4); `tests/**` and `scripts/**` cap `max-lines` (500), `complexity` (15), `max-depth` (4) (no per-function line limit — a `describe` body is one function). A handful of pre-existing functions exceed these by a small, documented margin; each has a file-scoped override in `eslint.config.mjs` with a `// TODO(quality)` comment explaining why an extraction isn't trivial. |
+| eslint | `npm run lint:eslint` | Any obsidianmd/typescript-eslint/vue rule, at `--max-warnings 0` — including the size/complexity limits: `src/**` caps `max-lines` (300), `max-lines-per-function` (80), `complexity` (12), `max-depth` (4), `max-params` (5), `max-nested-callbacks` (4); `tests/**`, `harness/**` and `scripts/**` cap `max-lines` (500), `complexity` (15), `max-depth` (4) (no per-function line limit — a `describe` body is one function). A handful of pre-existing functions exceed these by a small, documented margin; each has a file-scoped override in `eslint.config.mjs` with a `// TODO(quality)` comment explaining why an extraction isn't trivial. |
 | deadcode | `npm run deadcode` | fallow finding an unused export, file, component prop, or dependency. |
 | LOC | `npm run loc` | Any tracked file (`src/`, `tests/`, `scripts/`, `harness/` if present) exceeding 400 code lines — a backstop for file types eslint's size rules don't cover (`.css`, `.mjs` configs). Also prints a per-directory and top-10-files LOC table; `--json` for machine-readable output. |
 | Coverage thresholds | `npm run test:coverage` | v8 coverage over `src/**/*.{ts,vue}` dropping below thresholds: statements 90%, branches 80%, functions 90%, lines 90% (rounded down from the measured baseline, floored at 80/80/80/70). |
@@ -70,3 +72,9 @@ scenario and theme into `screenshots/`, and `npm run test:e2e` runs the Playwrig
 part of `npm run check`; run `test:e2e` before merging a change to `src/view/**` or
 `styles.css`. See [`harness/README.md`](harness/README.md) for the scenarios, the URL
 parameters and the `window.__harness` API.
+
+## Known limitations
+
+- A vault opened through a symlink or junction may report its files as outside the vault
+  when opening a file from the graph, since the repository root and the vault's base path
+  can resolve to different (non-symlinked) paths.

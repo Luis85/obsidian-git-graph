@@ -100,11 +100,11 @@ function onRefFilter(value: RefFilter): void {
         @update:filter-text="store.setFilter($event)"
       />
       <div
-        v-if="store.state.error !== null"
+        v-if="store.state.error !== null || store.state.statusError !== null"
         class="git-graph-banner"
         role="alert"
       >
-        <span class="git-graph-banner-text">{{ store.state.error }}</span>
+        <span class="git-graph-banner-text">{{ store.state.error ?? store.state.statusError }}</span>
         <button
           type="button"
           class="mod-cta"

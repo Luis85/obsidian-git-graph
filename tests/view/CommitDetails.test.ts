@@ -44,13 +44,14 @@ describe('CommitDetails', () => {
 		expect(writeText).toHaveBeenCalledWith('abcdef1234567890');
 	});
 
-	it('emits openFile with the current path when a file is clicked or activated with Enter', async () => {
+	it('emits openFile with the current path when a file is clicked or activated with Enter or Space', async () => {
 		const w = mount(CommitDetails, { props: { details, error: null } });
 		const files = w.findAll('.git-graph-file-link');
 		expect(files).toHaveLength(2);
 		await files[0]!.trigger('click');
 		await files[0]!.trigger('keydown', { key: 'Enter' });
+		await files[0]!.trigger('keydown', { key: ' ' });
 		await files[1]!.trigger('click');
-		expect(w.emitted('openFile')).toEqual([['a.md'], ['a.md'], ['new.md']]);
+		expect(w.emitted('openFile')).toEqual([['a.md'], ['a.md'], ['a.md'], ['new.md']]);
 	});
 });
