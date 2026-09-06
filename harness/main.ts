@@ -61,13 +61,24 @@ const changes = createEmitter<void>();
 const statusChanges = createEmitter<void>();
 const repoState = buildRepoState();
 const opened: string[] = [];
+const toast = document.querySelector<HTMLElement>('#harness-toast');
 
-/** Stands in for GitGraphPlugin.openFile: no vault to open a file in, so it just records the path. */
+function showToast(text: string): void {
+	if (toast !== null) toast.textContent = text;
+}
+
+function clearToast(): void {
+	if (toast !== null) toast.textContent = '';
+}
+
+/** Stands in for GitGraphPlugin.openFile: no vault to open a file in, so it records the path and says so. */
 function onOpenFile(path: string): void {
 	opened.push(path);
-	const toast = document.querySelector<HTMLElement>('#harness-toast');
-	if (toast !== null) toast.textContent = `Would open ${path}`;
+	showToast(`Would open ${path}`);
 }
+
+changes.on(clearToast);
+statusChanges.on(clearToast);
 
 // --- mount ----------------------------------------------------------------------------------
 
@@ -101,6 +112,7 @@ createApp({
 function navigate(key: string, value: string): void {
 	const next = new URLSearchParams(window.location.search);
 	next.set(key, value);
+	clearToast();
 	window.location.search = next.toString();
 }
 
