@@ -38,13 +38,14 @@ const emit = defineEmits<{ toggle: [hash: string]; loadMore: []; openFile: [path
 
 const OVERSCAN = 5;
 const DETAILS_FALLBACK = 240;
+const DIRTY_FALLBACK = 88;
 
 const container = ref<HTMLElement | null>(null);
 const scrollTop = ref(0);
 const measuredViewport = ref(600);
 
 const detailsBox = createMeasuredHeight(container, '.git-graph-details-host', DETAILS_FALLBACK, () => props.expandedHash);
-const dirtyBox = createMeasuredHeight(container, '.git-graph-dirty-host', DETAILS_FALLBACK, () => props.dirtyExpanded);
+const dirtyBox = createMeasuredHeight(container, '.git-graph-dirty-host', DIRTY_FALLBACK, () => props.dirtyExpanded);
 
 const viewport = computed(() => props.viewportHeight ?? measuredViewport.value);
 const dirtyOffset = computed(() => (props.dirty === null ? 0 : ROW_HEIGHT + (props.dirtyExpanded ? dirtyBox.height.value : 0)));

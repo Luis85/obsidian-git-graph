@@ -87,4 +87,9 @@ describe('parseStatus', () => {
 		]);
 		expect(parseStatus('')).toEqual([]);
 	});
+
+	it('lets a rename in either column win over a modification, so a dirty rename keeps its R label', () => {
+		const out = `RM${' '}new.md${Z}old.md${Z}`;
+		expect(parseStatus(out)).toEqual([{ path: 'new.md', status: 'R', oldPath: 'old.md' }]);
+	});
 });

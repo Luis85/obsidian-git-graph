@@ -223,6 +223,11 @@ describe('createGraphStore', () => {
 		await store.toggleDirty();
 		expect(store.state.dirtyExpanded).toBe(true);
 		expect(store.state.dirtyFiles?.map((f) => f.path)).toEqual(['a.md', 'b.md']);
+		await store.toggleDirty();
+		expect(store.state.dirtyExpanded).toBe(false);
+		expect(store.state.dirtyFiles).toBeNull();
+		await store.toggleDirty();
+		expect(store.state.dirtyExpanded).toBe(true);
 		reader.dirtyFiles = [{ path: 'a.md', status: 'M' }];
 		reader.changed = 1;
 		await store.refreshStatus();
@@ -232,9 +237,6 @@ describe('createGraphStore', () => {
 		await store.refreshStatus();
 		expect(store.state.dirtyExpanded).toBe(false);
 		expect(store.state.dirtyFiles).toBeNull();
-		await store.toggleDirty();
-		await store.toggleDirty();
-		expect(store.state.dirtyExpanded).toBe(false);
 	});
 
 	it('ignores results that arrive after dispose', async () => {

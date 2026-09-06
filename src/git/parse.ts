@@ -83,13 +83,17 @@ export function parseNameStatus(stdout: string): ChangedFile[] {
 const STATUS_LETTERS = new Set<string>(['A', 'M', 'D', 'R', 'C', 'T']);
 
 /**
- * The single status letter for one porcelain `XY` pair: the worktree column when it says
- * something, else the index column. `??` (untracked) reads as an addition, `!!` (ignored) is
- * dropped, and any other letter git may grow falls back to a modification.
+ * The single status letter for one porcelain `XY` pair: a rename/copy in either column wins
+ * (`R` preferred over `C` when both differ) so a dirty rename (`RM`) still reads as a rename,
+ * not a modification; otherwise the worktree column when it says something, else the index
+ * column. `??` (untracked) reads as an addition, `!!` (ignored) is dropped, and any other
+ * letter git may grow falls back to a modification.
  */
 function statusOf(x: string, y: string): FileStatus | null {
 	if (x === '!' && y === '!') return null;
 	if (x === '?' && y === '?') return 'A';
+	if (x === 'R' || y === 'R') return 'R';
+	if (x === 'C' || y === 'C') return 'C';
 	const letter = y !== ' ' ? y : x;
 	return STATUS_LETTERS.has(letter) ? (letter as FileStatus) : 'M';
 }
