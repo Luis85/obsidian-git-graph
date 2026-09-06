@@ -43,7 +43,7 @@ export class GitRepository implements GitReader {
 	async log(opts: { skip: number; count: number; refs: RefFilter }): Promise<Commit[]> {
 		const selection = await this.refSelection(opts.refs);
 		if (selection === null) return [];
-		const out = await this.run(['log', '--topo-order', '-z', `--format=${LOG_FORMAT}`, `--skip=${opts.skip}`, `--max-count=${opts.count}`, ...selection]);
+		const out = await this.run(['log', '--topo-order', '-z', `--format=${LOG_FORMAT}`, `--skip=${opts.skip}`, `--max-count=${opts.count}`, ...selection, '--']);
 		return parseLog(out);
 	}
 
@@ -88,8 +88,8 @@ export class GitRepository implements GitReader {
 
 	async commitDetails(hash: string): Promise<CommitDetails> {
 		const [showOut, filesOut] = await Promise.all([
-			this.run(['show', '--no-patch', `--format=${SHOW_FORMAT}`, hash]),
-			this.run(['diff-tree', '--no-commit-id', '-r', '--name-status', '-z', '-M', '--root', '-m', '--first-parent', hash]),
+			this.run(['show', '--no-patch', `--format=${SHOW_FORMAT}`, hash, '--']),
+			this.run(['diff-tree', '--no-commit-id', '-r', '--name-status', '-z', '-M', '--root', '-m', '--first-parent', hash, '--']),
 		]);
 		return { ...parseShow(showOut), files: parseNameStatus(filesOut) };
 	}

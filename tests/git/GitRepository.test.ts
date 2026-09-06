@@ -141,6 +141,20 @@ describe('status', () => {
 	});
 });
 
+describe('log with a file named HEAD present', () => {
+	it('still resolves refs=auto and reads commit details when a "HEAD" file exists in cwd', async () => {
+		const headFile = join(fixture.dir, 'HEAD');
+		writeFileSync(headFile, 'not a ref\n');
+		try {
+			const commits = await repo.log({ skip: 0, count: 200, refs: 'auto' });
+			expect(commits).toHaveLength(5);
+			expect(await repo.commitDetails(fixture.hashes.tip)).toMatchObject({ hash: fixture.hashes.tip });
+		} finally {
+			rmSync(headFile, { force: true });
+		}
+	});
+});
+
 describe('commitDetails', () => {
 	it('reads body, committer and the rename', async () => {
 		const details = await repo.commitDetails(fixture.hashes.tip);

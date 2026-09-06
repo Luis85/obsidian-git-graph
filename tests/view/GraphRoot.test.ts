@@ -45,6 +45,19 @@ describe('GraphRoot', () => {
 		expect(w.find('.git-graph-row-dirty').exists()).toBe(false);
 	});
 
+	it('reloads exactly once per settings change (a single settings prop update, not a double load)', async () => {
+		const reader = new FakeReader();
+		reader.commits = linear(1);
+		reader.refsSnapshot = { refs: [], headHash: 'c1', headBranch: 'main' };
+		const w = mountRoot({ kind: 'ready', root: 'C:/vault', reader });
+		await flushPromises();
+		const callsBefore = reader.logCalls.length;
+		await w.setProps({ settings: { ...DEFAULT_SETTINGS, pageSize: 20 } });
+		await flushPromises();
+		expect(reader.logCalls).toHaveLength(callsBefore + 1);
+		expect(reader.logCalls.at(-1)).toMatchObject({ count: 20 });
+	});
+
 	it('shows an error banner with retry while keeping rows, and clears it on success', async () => {
 		const reader = new FakeReader();
 		reader.commits = linear(2);

@@ -16,7 +16,8 @@ Read-only: the plugin never runs a git command that modifies the repository.
 
 Open the pane from the ribbon icon, or from the command palette: **Git Graph: Open**.
 **Git Graph: Refresh** re-reads the repository on demand; the pane also refreshes on its
-own when files change.
+own when the repository's git state changes (commits, branches, checkouts). Working-tree
+edits (unstaged/staged file changes) show up on the next refresh or git operation.
 
 ## Settings
 

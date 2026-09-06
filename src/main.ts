@@ -9,6 +9,9 @@ import { GIT_GRAPH_ICON, GIT_GRAPH_VIEW, GitGraphView, type ViewHost } from './v
 import type { RepoState } from './view/repoState';
 import { createGitWatcher, type GitWatcher } from './watch/gitWatcher';
 
+/** How long to wait after the last gitPath edit before re-resolving the repository. */
+export const GIT_PATH_DEBOUNCE_MS = 500;
+
 export default class GitGraphPlugin extends Plugin implements ViewHost {
 	settings: GitGraphSettings = { ...DEFAULT_SETTINGS };
 	readonly settingsRef = shallowRef<GitGraphSettings>(this.settings);
@@ -18,9 +21,18 @@ export default class GitGraphPlugin extends Plugin implements ViewHost {
 	private watcher: GitWatcher | null = null;
 	private openViews = 0;
 	private initGeneration = 0;
+	// Runs in Obsidian's Electron renderer, so timers go through `window` per the
+	// obsidianmd popout-window rule (obsidianmd/prefer-window-timers).
+	private reinitTimer: number | null = null;
 
 	async onload(): Promise<void> {
-		this.settings = normalizeSettings(await this.loadData());
+		let data: unknown = null;
+		try {
+			data = await this.loadData();
+		} catch (e) {
+			console.error('Git graph: failed to load settings, using defaults', e);
+		}
+		this.settings = normalizeSettings(data);
 		this.settingsRef.value = this.settings;
 
 		this.registerView(GIT_GRAPH_VIEW, (leaf) => new GitGraphView(leaf, this));
@@ -35,6 +47,10 @@ export default class GitGraphPlugin extends Plugin implements ViewHost {
 	onunload(): void {
 		this.watcher?.dispose();
 		this.watcher = null;
+		if (this.reinitTimer !== null) {
+			window.clearTimeout(this.reinitTimer);
+			this.reinitTimer = null;
+		}
 	}
 
 	/** Resolves the repository for the vault folder and (re)starts the watcher. Safe to call again. */
@@ -76,11 +92,22 @@ export default class GitGraphPlugin extends Plugin implements ViewHost {
 	}
 
 	async updateSettings(patch: Partial<GitGraphSettings>): Promise<void> {
+		const previousGitPath = this.settings.gitPath;
 		this.settings = normalizeSettings({ ...this.settings, ...patch });
 		await this.saveData(this.settings);
 		this.settingsRef.value = this.settings;
-		if (patch.gitPath !== undefined) await this.initRepo();
-		else this.changes.emit();
+		// A changed identity (normalizeSettings always returns a new object) is enough to make
+		// settingsRef's watcher in GraphRoot reload — no separate changes.emit() needed here.
+		if (patch.gitPath !== undefined && this.settings.gitPath !== previousGitPath) this.scheduleReinit();
+	}
+
+	/** Debounces initRepo() so a partially-typed gitPath doesn't spawn git on every keystroke. */
+	private scheduleReinit(): void {
+		if (this.reinitTimer !== null) window.clearTimeout(this.reinitTimer);
+		this.reinitTimer = window.setTimeout(() => {
+			this.reinitTimer = null;
+			void this.initRepo();
+		}, GIT_PATH_DEBOUNCE_MS);
 	}
 
 	refresh(): void {

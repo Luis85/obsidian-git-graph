@@ -38,4 +38,12 @@ describe('runGit', () => {
 		expect(err).toBeInstanceOf(GitError);
 		expect((err as GitError).code).toBe('TIMEOUT');
 	});
+
+	it('throws GitError EXIT (not TIMEOUT) when output exceeds maxBuffer', async () => {
+		const err = await runGit('node', cwd, ['-e', "process.stdout.write('x'.repeat(2000))"], { maxBuffer: 100 }).catch((e: unknown) => e);
+		expect(err).toBeInstanceOf(GitError);
+		const gitErr = err as GitError;
+		expect(gitErr.code).toBe('EXIT');
+		expect(gitErr.stderr).toMatch(/buffer/);
+	});
 });

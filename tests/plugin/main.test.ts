@@ -1,9 +1,10 @@
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { App, FileSystemAdapter, Plugin as MockPlugin } from '../helpers/obsidian-mock';
-import GitGraphPlugin from '../../src/main';
+import GitGraphPlugin, { GIT_PATH_DEBOUNCE_MS } from '../../src/main';
+import { DEFAULT_SETTINGS } from '../../src/settings/types';
 import { GIT_GRAPH_VIEW } from '../../src/view/GitGraphView';
 import { createFixtureRepo, type FixtureRepo } from '../helpers/fixtureRepo';
 
@@ -46,6 +47,19 @@ describe('GitGraphPlugin', () => {
 		plugin.onunload();
 	});
 
+	it('still registers the view and falls back to default settings when loadData rejects', async () => {
+		const plugin = makePlugin(fixture.dir);
+		plugin.loadData = () => Promise.reject(new Error('corrupt'));
+		const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+		await plugin.onload();
+		expect([...plugin.views.keys()]).toEqual([GIT_GRAPH_VIEW]);
+		expect(plugin.settings).toEqual(DEFAULT_SETTINGS);
+		expect(consoleError).toHaveBeenCalled();
+		consoleError.mockRestore();
+		await plugin.initRepo();
+		plugin.onunload();
+	});
+
 	it('reports a non-repository vault and a missing git binary', async () => {
 		const outside = mkdtempSync(join(tmpdir(), 'git-graph-plugin-'));
 		try {
@@ -64,7 +78,10 @@ describe('GitGraphPlugin', () => {
 		}
 	});
 
-	it('normalizes and saves settings, emits a change, and re-resolves when gitPath changes', async () => {
+	it('normalizes and saves settings and updates settingsRef without emitting a change event', async () => {
+		// GraphRoot reloads off settingsRef's identity change (normalizeSettings always returns
+		// a new object), so updateSettings must not also emit on `changes` — that would be a
+		// second, stale-settings reload. See GraphRoot.vue's settings watch.
 		const plugin = makePlugin(fixture.dir, { pageSize: 50, bogus: true });
 		await plugin.onload();
 		await plugin.initRepo();
@@ -74,10 +91,53 @@ describe('GitGraphPlugin', () => {
 		await plugin.updateSettings({ refFilter: 'all' });
 		expect(plugin.saved.at(-1)).toMatchObject({ refFilter: 'all', pageSize: 50 });
 		expect(plugin.settingsRef.value.refFilter).toBe('all');
-		expect(changes).toBe(1);
-		await plugin.updateSettings({ gitPath: 'no-such-git' });
-		expect(plugin.repoState.value.kind).toBe('no-git');
+		expect(changes).toBe(0);
 		plugin.onunload();
+	});
+
+	describe('gitPath changes', () => {
+		afterEach(() => {
+			vi.useRealTimers();
+		});
+
+		it('debounces the re-init: repoState stays ready until 500ms pass, then becomes no-git', async () => {
+			vi.useFakeTimers();
+			const plugin = makePlugin(fixture.dir);
+			await plugin.onload();
+			await plugin.initRepo();
+			expect(plugin.repoState.value.kind).toBe('ready');
+			const update = plugin.updateSettings({ gitPath: 'no-such-git' });
+			await update;
+			expect(plugin.repoState.value.kind).toBe('ready');
+			await vi.advanceTimersByTimeAsync(GIT_PATH_DEBOUNCE_MS);
+			expect(plugin.repoState.value.kind).toBe('no-git');
+			plugin.onunload();
+		});
+
+		it('collapses two rapid gitPath updates into exactly one initRepo call', async () => {
+			vi.useFakeTimers();
+			const plugin = makePlugin(fixture.dir);
+			await plugin.onload();
+			await plugin.initRepo();
+			const initRepoSpy = vi.spyOn(plugin, 'initRepo');
+			await plugin.updateSettings({ gitPath: 'no-such-git' });
+			await plugin.updateSettings({ gitPath: 'still-no-such-git' });
+			await vi.advanceTimersByTimeAsync(GIT_PATH_DEBOUNCE_MS);
+			expect(initRepoSpy).toHaveBeenCalledTimes(1);
+			plugin.onunload();
+		});
+
+		it('schedules nothing when gitPath is set to its current value', async () => {
+			vi.useFakeTimers();
+			const plugin = makePlugin(fixture.dir);
+			await plugin.onload();
+			await plugin.initRepo();
+			const initRepoSpy = vi.spyOn(plugin, 'initRepo');
+			await plugin.updateSettings({ gitPath: plugin.settings.gitPath });
+			await vi.advanceTimersByTimeAsync(GIT_PATH_DEBOUNCE_MS);
+			expect(initRepoSpy).not.toHaveBeenCalled();
+			plugin.onunload();
+		});
 	});
 
 	it('pauses the watcher while no view is open and the refresh command emits a change', async () => {

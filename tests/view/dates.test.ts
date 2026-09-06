@@ -14,8 +14,8 @@ describe('formatDate', () => {
 	});
 
 	it('formats absolute dates in local time as YYYY-MM-DD HH:mm', () => {
-		expect(formatDate('2026-09-06T10:00:00Z', 'absolute', now)).toMatch(/^2026-09-0[56] \d\d:\d\d$/);
-		expect(formatAbsolute('2026-09-06T10:00:00Z')).toMatch(/^2026-09-0[56] \d\d:\d\d$/);
+		expect(formatDate('2026-09-06T10:00:00Z', 'absolute', now)).toMatch(/^2026-09-0[567] \d\d:\d\d$/);
+		expect(formatAbsolute('2026-09-06T10:00:00Z')).toMatch(/^2026-09-0[567] \d\d:\d\d$/);
 	});
 
 	it('returns the input when it is not a date', () => {
