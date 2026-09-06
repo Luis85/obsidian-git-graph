@@ -99,16 +99,27 @@ export class Plugin {
 }
 
 export class ItemView {
-	readonly contentEl: HTMLElement;
+	readonly contentEl: HTMLElement & { empty(): void; createDiv(cls?: string): HTMLDivElement };
 	readonly containerEl: HTMLElement;
 	readonly app: App;
 
 	constructor(readonly leaf: WorkspaceLeaf) {
 		this.containerEl = document.createElement('div');
-		this.contentEl = document.createElement('div');
+		this.contentEl = document.createElement('div') as HTMLElement & { empty(): void; createDiv(cls?: string): HTMLDivElement };
 		this.contentEl.classList.add('view-content');
 		this.containerEl.appendChild(this.contentEl);
 		this.app = new App();
+		Object.assign(this.contentEl, {
+			empty() {
+				(this as HTMLElement).replaceChildren();
+			},
+			createDiv(cls?: string) {
+				const d = document.createElement('div');
+				if (cls) d.className = cls;
+				(this as HTMLElement).appendChild(d);
+				return d;
+			},
+		});
 	}
 	getViewType(): string {
 		throw new Error('ItemView.getViewType must be implemented by a subclass');
