@@ -13,14 +13,53 @@ const tsconfigRootDir = fileURLToPath(new URL('.', import.meta.url));
 // src/**/*.ts, which need type information; point the parser at this project's tsconfig.
 const typeAwareParserOptions = { projectService: true, tsconfigRootDir };
 
+// A glob pattern like '**/*.ts' or '**/*.{ts,tsx}' targets TypeScript if its extension
+// (the plain suffix after the last '.', or the comma-separated list inside a trailing
+// '.{...}' brace group) includes one of ts/tsx/cts/mts.
+const TS_EXTENSIONS = ['ts', 'tsx', 'cts', 'mts'];
+function patternTargetsTypeScript(pattern) {
+	const extensionList = pattern.match(/\.\{([^}]+)\}$/) ?? pattern.match(/\.([A-Za-z]+)$/);
+	if (!extensionList) return false;
+	return extensionList[1]
+		.split(',')
+		.map((ext) => ext.trim())
+		.some((ext) => TS_EXTENSIONS.includes(ext));
+}
+
+// obsidianmd's recommended config array mixes four shapes of entry:
+//   1. `files` targeting TypeScript (directly, or as nested arrays produced when obsidianmd's
+//      own `extends` intersects an outer files list with a TS-scoped sub-config, e.g.
+//      [['**/*.{js,cjs,mjs,jsx}', '**/*.ts'], ...]) — rescope these to SRC, since that's the
+//      TypeScript/Vue source this project actually lints.
+//   2. `files: ['package.json']` — validates the real package.json at the project root; leave
+//      completely untouched, anchoring it under src/ would make it stop matching the file it
+//      exists to check.
+//   3. `files` targeting only JavaScript (e.g. `**/*.{js,cjs,mjs,jsx}`) — these globs are
+//      unanchored, so left verbatim they'd also match this repo's *root* tooling
+//      (eslint.config.mjs, scripts/**/*.mjs), which obsidianmd's plugin-guideline rules were
+//      never meant to lint (that surfaced as real rule violations, e.g. flagging our own
+//      scripts' console.log calls, when this was tried). Anchor them under src/ instead, so
+//      they stay ready for any .js source that lands in src/ without leaking rules onto
+//      unrelated project tooling; today src/ is all .ts/.vue, so this matches nothing.
+//   4. no `files` at all (bare rule/plugin registrations, or linterOptions/languageOptions
+//      entries) — narrow to SRC like case 1, EXCEPT a *pure* plugin registration (only a
+//      `plugins` key, e.g. `{ plugins: { obsidianmd } }`): the JS-scoped rule block from case 3
+//      references `obsidianmd/*` rules and needs the plugin resolvable wherever it matches, so
+//      that registration must stay global rather than be narrowed to SRC.
+function scopeObsidianConfigEntry(c) {
+	if (c.files !== undefined) {
+		const patterns = c.files.flat(Infinity);
+		if (patterns.some(patternTargetsTypeScript)) return { ...c, files: SRC };
+		if (patterns.every((p) => p === 'package.json')) return c;
+		return { ...c, files: c.files.map((p) => `src/${p}`) };
+	}
+	const isPluginRegistrationOnly = Object.keys(c).every((key) => key === 'plugins');
+	return isPluginRegistrationOnly ? c : { ...c, files: SRC };
+}
+
 export default defineConfig([
 	{ ignores: ['node_modules/**', 'dist/**', '.obsidian/**', 'coverage/**', 'docs/**'] },
-	// Some entries in obsidianmd's recommended config are scoped to package.json (JSON
-	// language, not a JS/TS parser) to validate plugin metadata; forcing `files: SRC` onto
-	// those would run the JSON language over our .ts/.vue sources, so leave them as-is.
-	...obsidianmd.configs.recommended.map((c) =>
-		Array.isArray(c.files) && c.files.length === 1 && c.files[0] === 'package.json' ? c : { ...c, files: SRC },
-	),
+	...obsidianmd.configs.recommended.map(scopeObsidianConfigEntry),
 	...pluginVue.configs['flat/recommended'].map((c) => ({ ...c, files: ['src/**/*.vue'] })),
 	{
 		files: ['src/**/*.vue'],
