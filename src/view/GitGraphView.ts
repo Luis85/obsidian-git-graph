@@ -13,6 +13,7 @@ export interface ViewHost extends SettingsHost {
 	readonly repoState: ShallowRef<RepoState>;
 	readonly settingsRef: ShallowRef<GitGraphSettings>;
 	readonly changes: Emitter<void>;
+	readonly statusChanges: Emitter<void>;
 	viewOpened(): void;
 	viewClosed(): void;
 }
@@ -49,6 +50,7 @@ export class GitGraphView extends ItemView {
 					repoState: host.repoState.value,
 					settings: host.settingsRef.value,
 					changes: host.changes,
+					statusChanges: host.statusChanges,
 					onUpdateSettings: (patch: Partial<GitGraphSettings>) => void host.updateSettings(patch),
 				}),
 		});

@@ -19,6 +19,7 @@ function makeHost(repoState: RepoState = { kind: 'none' }): ViewHost {
 		repoState: shallowRef<RepoState>(repoState),
 		settingsRef: shallowRef({ ...DEFAULT_SETTINGS }),
 		changes: createEmitter<void>(),
+		statusChanges: createEmitter<void>(),
 		viewOpened: vi.fn(),
 		viewClosed: vi.fn(),
 	};

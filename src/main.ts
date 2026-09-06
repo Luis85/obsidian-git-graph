@@ -11,12 +11,15 @@ import { createGitWatcher, type GitWatcher } from './watch/gitWatcher';
 
 /** How long to wait after the last gitPath edit before re-resolving the repository. */
 export const GIT_PATH_DEBOUNCE_MS = 500;
+/** How long to wait after the last vault edit before refreshing the dirty-changes count. */
+export const STATUS_DEBOUNCE_MS = 500;
 
 export default class GitGraphPlugin extends Plugin implements ViewHost {
 	settings: GitGraphSettings = { ...DEFAULT_SETTINGS };
 	readonly settingsRef = shallowRef<GitGraphSettings>(this.settings);
 	readonly repoState = shallowRef<RepoState>({ kind: 'unresolved' });
 	readonly changes = createEmitter<void>();
+	readonly statusChanges = createEmitter<void>();
 
 	private watcher: GitWatcher | null = null;
 	private openViews = 0;
@@ -24,6 +27,7 @@ export default class GitGraphPlugin extends Plugin implements ViewHost {
 	// Runs in Obsidian's Electron renderer, so timers go through `window` per the
 	// obsidianmd popout-window rule (obsidianmd/prefer-window-timers).
 	private reinitTimer: number | null = null;
+	private statusTimer: number | null = null;
 
 	async onload(): Promise<void> {
 		let data: unknown = null;
@@ -40,17 +44,42 @@ export default class GitGraphPlugin extends Plugin implements ViewHost {
 		this.addCommand({ id: 'open', name: 'Open', callback: () => void this.activateView() });
 		this.addCommand({ id: 'refresh', name: 'Refresh', callback: () => this.refresh() });
 		this.addSettingTab(new GitGraphSettingTab(this.app, this));
+		this.registerVaultWatchers();
 
 		this.app.workspace.onLayoutReady(() => void this.initRepo());
 	}
 
 	onunload(): void {
+		this.initGeneration++;
 		this.watcher?.dispose();
 		this.watcher = null;
 		if (this.reinitTimer !== null) {
 			window.clearTimeout(this.reinitTimer);
 			this.reinitTimer = null;
 		}
+		if (this.statusTimer !== null) {
+			window.clearTimeout(this.statusTimer);
+			this.statusTimer = null;
+		}
+	}
+
+	/** Refreshes the dirty-changes count (debounced) whenever a vault file is touched. */
+	private registerVaultWatchers(): void {
+		const onVaultEdit = (): void => this.scheduleStatusRefresh();
+		this.registerEvent(this.app.vault.on('modify', onVaultEdit));
+		this.registerEvent(this.app.vault.on('create', onVaultEdit));
+		this.registerEvent(this.app.vault.on('delete', onVaultEdit));
+		this.registerEvent(this.app.vault.on('rename', onVaultEdit));
+	}
+
+	/** Debounces vault edits into a single `statusChanges` emit, only while a view is open and the repo is ready. */
+	private scheduleStatusRefresh(): void {
+		if (this.openViews === 0 || this.repoState.value.kind !== 'ready') return;
+		if (this.statusTimer !== null) window.clearTimeout(this.statusTimer);
+		this.statusTimer = window.setTimeout(() => {
+			this.statusTimer = null;
+			this.statusChanges.emit();
+		}, STATUS_DEBOUNCE_MS);
 	}
 
 	/** Resolves the repository for the vault folder and (re)starts the watcher. Safe to call again. */

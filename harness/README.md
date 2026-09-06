@@ -79,6 +79,7 @@ window.__harness = {
   params,             // the query string as a plain object
   ready,              // Promise<void>, resolves once the first load has settled
   emitChange(),       // fires the `changes` emitter — the plugin's "files changed" signal
+  emitStatusChange(), // fires the `statusChanges` emitter — the plugin's debounced vault-edit signal
   setFilter(text),    // types into the commit filter box
 };
 ```

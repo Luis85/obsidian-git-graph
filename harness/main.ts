@@ -16,6 +16,7 @@ interface HarnessApi {
 	readonly params: Record<string, string>;
 	readonly ready: Promise<void>;
 	emitChange(): void;
+	emitStatusChange(): void;
 	setFilter(text: string): void;
 }
 
@@ -56,6 +57,7 @@ function buildRepoState(): RepoState {
 
 const settings = shallowRef(buildSettings());
 const changes = createEmitter<void>();
+const statusChanges = createEmitter<void>();
 const repoState = buildRepoState();
 
 // --- mount ----------------------------------------------------------------------------------
@@ -77,6 +79,7 @@ createApp({
 			repoState,
 			settings: settings.value,
 			changes,
+			statusChanges,
 			onUpdateSettings: (patch: Partial<GitGraphSettings>) => {
 				settings.value = { ...settings.value, ...patch };
 			},
@@ -186,5 +189,6 @@ window.__harness = {
 	params: Object.fromEntries(params),
 	ready,
 	emitChange: () => changes.emit(),
+	emitStatusChange: () => statusChanges.emit(),
 	setFilter,
 };

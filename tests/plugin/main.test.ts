@@ -165,4 +165,38 @@ describe('GitGraphPlugin', () => {
 		plugin.viewClosed();
 		plugin.onunload();
 	});
+
+	describe('lifecycle and vault-driven status refresh', () => {
+		afterEach(() => {
+			vi.useRealTimers();
+		});
+
+		it('unloading cancels an in-flight repository resolution', async () => {
+			const plugin = makePlugin(fixture.dir);
+			await plugin.onload();
+			const pending = plugin.initRepo();
+			plugin.onunload();
+			await pending;
+			expect(plugin.repoState.value.kind).toBe('unresolved');
+		});
+
+		it('debounces vault edits into one status change while a view is open', async () => {
+			vi.useFakeTimers();
+			const plugin = makePlugin(fixture.dir);
+			await plugin.onload();
+			await plugin.initRepo();
+			let statusChanges = 0;
+			plugin.statusChanges.on(() => statusChanges++);
+			const app = plugin.app as unknown as App;
+			app.vault.trigger('modify');
+			await vi.advanceTimersByTimeAsync(600);
+			expect(statusChanges).toBe(0); // no view open
+			plugin.viewOpened();
+			app.vault.trigger('modify');
+			app.vault.trigger('create');
+			await vi.advanceTimersByTimeAsync(600);
+			expect(statusChanges).toBe(1);
+			plugin.onunload();
+		});
+	});
 });

@@ -8,15 +8,18 @@ import GraphHeader from './GraphHeader.vue';
 import type { RepoState } from './repoState';
 import { createGraphStore, type GraphStore } from './store';
 
-const props = defineProps<{ repoState: RepoState; settings: GitGraphSettings; changes: Emitter<void> }>();
+const props = defineProps<{ repoState: RepoState; settings: GitGraphSettings; changes: Emitter<void>; statusChanges: Emitter<void> }>();
 const emit = defineEmits<{ updateSettings: [patch: Partial<GitGraphSettings>] }>();
 
 const store = shallowRef<GraphStore | null>(null);
-let unsubscribe: (() => void) | null = null;
+let unsubscribeChanges: (() => void) | null = null;
+let unsubscribeStatus: (() => void) | null = null;
 
 function teardown(): void {
-	unsubscribe?.();
-	unsubscribe = null;
+	unsubscribeChanges?.();
+	unsubscribeChanges = null;
+	unsubscribeStatus?.();
+	unsubscribeStatus = null;
 	store.value?.dispose();
 	store.value = null;
 }
@@ -28,7 +31,8 @@ watch(
 		if (state.kind !== 'ready') return;
 		const s = createGraphStore({ reader: state.reader, settings: () => props.settings });
 		store.value = s;
-		unsubscribe = props.changes.on(() => void s.load());
+		unsubscribeChanges = props.changes.on(() => void s.load());
+		unsubscribeStatus = props.statusChanges.on(() => void s.refreshStatus());
 		void s.load();
 	},
 	{ immediate: true },
@@ -48,7 +52,7 @@ const dirty = computed(() => {
 	const s = store.value;
 	if (!s || !props.settings.showDirtyRow || s.state.dirtyCount === 0) return null;
 	const head = s.state.rows.find((r) => r.hash === s.state.headHash);
-	return { count: s.state.dirtyCount, laneCount: head?.laneCount ?? 1, headLane: head?.lane ?? 0, color: head?.color ?? 0 };
+	return { count: s.state.dirtyCount, laneCount: head?.laneCount ?? s.state.rows[0]?.laneCount ?? 1, headLane: head?.lane ?? 0, color: head?.color ?? 0 };
 });
 
 const showGraph = computed(() => (store.value?.state.filterText.trim().length ?? 0) === 0);

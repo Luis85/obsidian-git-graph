@@ -152,6 +152,33 @@ describe('createGraphStore', () => {
 		expect(store.visibleRows.value).toHaveLength(2);
 	});
 
+	it('refreshStatus updates only the dirty count', async () => {
+		const reader = new FakeReader();
+		reader.commits = linear(2);
+		const store = createGraphStore({ reader, settings: settings() });
+		await store.load();
+		reader.changed = 5;
+		await store.refreshStatus();
+		expect(store.state.dirtyCount).toBe(5);
+		expect(reader.logCalls).toHaveLength(1);
+		expect(reader.statusCalls).toBe(2);
+	});
+
+	it('refreshStatus is a no-op when the dirty row is off or after dispose', async () => {
+		const reader = new FakeReader();
+		reader.commits = linear(1);
+		reader.changed = 2;
+		const store = createGraphStore({ reader, settings: settings({ showDirtyRow: false }) });
+		await store.load();
+		await store.refreshStatus();
+		expect(reader.statusCalls).toBe(0);
+		const live = createGraphStore({ reader, settings: settings() });
+		await live.load();
+		live.dispose();
+		await live.refreshStatus();
+		expect(live.state.dirtyCount).toBe(2);
+	});
+
 	it('ignores results that arrive after dispose', async () => {
 		const reader = new FakeReader();
 		reader.deferLog = true;

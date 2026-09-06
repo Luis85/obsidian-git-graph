@@ -34,8 +34,23 @@ export class FileSystemAdapter {
 	}
 }
 
+export interface EventRef {
+	name: string;
+	cb: () => void;
+}
+
 export class App {
-	vault = { adapter: new FileSystemAdapter('C:/fake-vault') as unknown };
+	vault = {
+		adapter: new FileSystemAdapter('C:/fake-vault') as unknown,
+		handlers: {} as Record<string, (() => void)[]>,
+		on(name: string, cb: () => void): EventRef {
+			(this.handlers[name] ??= []).push(cb);
+			return { name, cb };
+		},
+		trigger(name: string): void {
+			for (const cb of this.handlers[name] ?? []) cb();
+		},
+	};
 	workspace = {
 		leaves: [] as WorkspaceLeaf[],
 		layoutReady: false,
@@ -67,6 +82,7 @@ export class Plugin {
 	readonly commands: Command[] = [];
 	readonly settingTabs: PluginSettingTab[] = [];
 	readonly saved: unknown[] = [];
+	readonly registeredEvents: EventRef[] = [];
 	data: unknown = null;
 
 	constructor(
@@ -96,6 +112,9 @@ export class Plugin {
 		return command;
 	}
 	register(_cb: () => void): void {}
+	registerEvent(ref: EventRef): void {
+		this.registeredEvents.push(ref);
+	}
 }
 
 export class ItemView {

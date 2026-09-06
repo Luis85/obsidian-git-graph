@@ -35,6 +35,7 @@ export interface GraphStore {
 	commitOf(hash: string): Commit | undefined;
 	load(): Promise<void>;
 	loadMore(): Promise<void>;
+	refreshStatus(): Promise<void>;
 	toggleExpand(hash: string): Promise<void>;
 	setFilter(text: string): void;
 	dispose(): void;
@@ -53,6 +54,43 @@ function groupRefs(refs: Ref[]): Map<string, Ref[]> {
 		else map.set(ref.hash, [ref]);
 	}
 	return map;
+}
+
+/** Builds `toggleExpand`: expands/collapses a row and loads its details, ignoring stale results. */
+function createExpandToggler(deps: GraphStoreDeps, state: GraphState, isDisposed: () => boolean, collapse: () => void): (hash: string) => Promise<void> {
+	return async function toggleExpand(hash: string): Promise<void> {
+		if (state.expandedHash === hash) {
+			collapse();
+			return;
+		}
+		state.expandedHash = hash;
+		state.expandedDetails = null;
+		state.detailsError = null;
+		try {
+			const details = await deps.reader.commitDetails(hash);
+			if (isDisposed() || state.expandedHash !== hash) return;
+			state.expandedDetails = details;
+		} catch (e) {
+			if (isDisposed() || state.expandedHash !== hash) return;
+			state.detailsError = errorMessage(e);
+		}
+	};
+}
+
+/** Builds `refreshStatus`: re-runs `status()` only, generation-guarded like `load()`, never touching `rows`. */
+function createStatusRefresher(deps: GraphStoreDeps, state: GraphState, currentGeneration: () => number, isDisposed: () => boolean): () => Promise<void> {
+	return async function refreshStatus(): Promise<void> {
+		if (isDisposed() || !deps.settings().showDirtyRow) return;
+		const gen = currentGeneration();
+		try {
+			const status = await deps.reader.status();
+			if (gen !== currentGeneration() || isDisposed()) return;
+			state.dirtyCount = status.changed;
+		} catch (e) {
+			if (gen !== currentGeneration() || isDisposed()) return;
+			state.error = errorMessage(e);
+		}
+	};
 }
 
 export function createGraphStore(deps: GraphStoreDeps): GraphStore {
@@ -153,23 +191,8 @@ export function createGraphStore(deps: GraphStoreDeps): GraphStore {
 		}
 	}
 
-	async function toggleExpand(hash: string): Promise<void> {
-		if (state.expandedHash === hash) {
-			collapse();
-			return;
-		}
-		state.expandedHash = hash;
-		state.expandedDetails = null;
-		state.detailsError = null;
-		try {
-			const details = await deps.reader.commitDetails(hash);
-			if (disposed || state.expandedHash !== hash) return;
-			state.expandedDetails = details;
-		} catch (e) {
-			if (disposed || state.expandedHash !== hash) return;
-			state.detailsError = errorMessage(e);
-		}
-	}
+	const refreshStatus = createStatusRefresher(deps, state, () => generation, () => disposed);
+	const toggleExpand = createExpandToggler(deps, state, () => disposed, collapse);
 
 	return {
 		state,
@@ -177,6 +200,7 @@ export function createGraphStore(deps: GraphStoreDeps): GraphStore {
 		commitOf: (hash) => byHash.get(hash),
 		load,
 		loadMore,
+		refreshStatus,
 		toggleExpand,
 		setFilter(text) {
 			state.filterText = text;
