@@ -50,6 +50,36 @@ test('dark theme sets body.theme-dark and paints a dark background', async ({ pa
 	expect(background).not.toBe('rgba(0, 0, 0, 0)');
 });
 
+test('rows below the details keep their measured offset after collapsing and expanding another row', async ({ page }) => {
+	await open(page, 'scenario=long');
+	const rows = page.locator('.git-graph-row');
+	const measure = () =>
+		page.evaluate(() => {
+			const host = document.querySelector<HTMLElement>('.git-graph-details')?.parentElement ?? null;
+			const items = [...document.querySelectorAll<HTMLElement>('.git-graph-item')];
+			const at = items.findIndex((item) => host !== null && item.contains(host));
+			const [expandedY, nextY] = [items[at], items[at + 1]].map((el) => Number(/translateY\((-?\d+(?:\.\d+)?)px\)/.exec(el?.style.transform ?? '')?.[1] ?? NaN));
+			return { hostHeight: host?.offsetHeight ?? 0, expandedY: expandedY ?? NaN, nextY: nextY ?? NaN };
+		});
+
+	await rows.nth(1).click();
+	await expect(page.locator('.git-graph-details-hash code')).toBeVisible();
+	await expect.poll(async () => (await measure()).nextY).not.toBeNaN();
+	const first = await measure();
+	expect(first.hostHeight).toBeGreaterThan(0);
+	expect(first.nextY).toBe(first.expandedY + 22 + first.hostHeight);
+
+	await rows.nth(1).click();
+	await expect(page.locator('.git-graph-details')).toHaveCount(0);
+
+	await rows.nth(5).click();
+	await expect(page.locator('.git-graph-details-hash code')).toBeVisible();
+	await expect.poll(async () => {
+		const m = await measure();
+		return m.nextY === m.expandedY + 22 + m.hostHeight;
+	}).toBe(true);
+});
+
 test('clicking a commit row opens its details', async ({ page }) => {
 	await open(page, 'scenario=merge');
 	await expect(page.locator('.git-graph-details')).toHaveCount(0);

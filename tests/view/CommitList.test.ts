@@ -110,4 +110,49 @@ describe('CommitList', () => {
 			Reflect.deleteProperty(window, 'ResizeObserver');
 		}
 	});
+
+	it('re-observes the details element after collapsing and expanding another row', async () => {
+		class FakeRO {
+			static instances: FakeRO[] = [];
+			observed: Element[] = [];
+			disconnected = false;
+			constructor(public cb: ResizeObserverCallback) {
+				FakeRO.instances.push(this);
+			}
+			observe(el: Element): void {
+				this.observed.push(el);
+			}
+			disconnect(): void {
+				this.disconnected = true;
+			}
+		}
+		Object.defineProperty(window, 'ResizeObserver', { value: FakeRO, configurable: true });
+		try {
+			const w = mountList({ expandedHash: 'c1' });
+			await nextTick();
+			const containerEl = w.get('.git-graph-list').element;
+			const observerFor = (el: Element) => FakeRO.instances.find((inst) => inst.observed.includes(el));
+			const firstEl = w.get('.git-graph-details').element.parentElement as HTMLElement;
+			expect(observerFor(firstEl)).toBeDefined();
+
+			await w.setProps({ expandedHash: null } as never);
+			await nextTick();
+			expect(observerFor(firstEl)?.disconnected).toBe(true);
+
+			await w.setProps({ expandedHash: 'c2' } as never);
+			await nextTick();
+			const secondEl = w.get('.git-graph-details').element.parentElement as HTMLElement;
+			expect(secondEl).not.toBe(firstEl);
+			expect(secondEl).not.toBe(containerEl);
+			const second = observerFor(secondEl);
+			expect(second).toBeDefined();
+
+			Object.defineProperty(secondEl, 'offsetHeight', { value: 100, configurable: true });
+			second!.cb([], second as never);
+			await nextTick();
+			expect(w.get('.git-graph-list-spacer').attributes('style')).toContain(`height: ${1000 * 22 + 100}px`);
+		} finally {
+			Reflect.deleteProperty(window, 'ResizeObserver');
+		}
+	});
 });

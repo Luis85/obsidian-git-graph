@@ -35,9 +35,10 @@ const OVERSCAN = 5;
 const DETAILS_FALLBACK = 240;
 
 const container = ref<HTMLElement | null>(null);
-// A template ref bound inside `v-for` is always delivered as an array by Vue's compiler
-// (ref_for: true), even though the sibling v-if guarantees at most one match here.
-const detailsEl = ref<HTMLElement | HTMLElement[] | null>(null);
+// Counts mounts of the details wrapper. A template ref inside `v-for` is an array that Vue
+// mutates in place, so watching it only fires for the first expanded row; the counter plus a
+// post-flush query below re-observes whichever wrapper is currently in the DOM.
+const detailsMounts = ref(0);
 const scrollTop = ref(0);
 const measuredViewport = ref(600);
 const detailsHeight = ref(DETAILS_FALLBACK);
@@ -91,16 +92,29 @@ onMounted(() => {
 	if (container.value) observer.observe(container.value);
 });
 
-watch(detailsEl, (raw) => {
-	detailsObserver?.disconnect();
-	detailsObserver = null;
-	const el = Array.isArray(raw) ? (raw[0] ?? null) : raw;
-	if (el === null || typeof ResizeObserver === 'undefined') return;
-	detailsObserver = new ResizeObserver(() => {
-		detailsHeight.value = el.offsetHeight || DETAILS_FALLBACK;
-	});
-	detailsObserver.observe(el);
-});
+// Vue re-invokes a function ref on every patch, so only a genuinely new element counts.
+let lastDetailsEl: HTMLElement | null = null;
+function onDetailsRef(el: unknown): void {
+	if (el instanceof HTMLElement && el !== lastDetailsEl) {
+		lastDetailsEl = el;
+		detailsMounts.value++;
+	}
+}
+
+watch(
+	[() => props.expandedHash, detailsMounts],
+	() => {
+		detailsObserver?.disconnect();
+		detailsObserver = null;
+		const el = container.value?.querySelector<HTMLElement>('.git-graph-details-host') ?? null;
+		if (el === null || typeof ResizeObserver === 'undefined') return;
+		detailsObserver = new ResizeObserver(() => {
+			detailsHeight.value = el.offsetHeight || DETAILS_FALLBACK;
+		});
+		detailsObserver.observe(el);
+	},
+	{ flush: 'post' },
+);
 
 onBeforeUnmount(() => {
 	observer?.disconnect();
@@ -153,7 +167,8 @@ const headLane = computed(() => props.rows.find((r) => r.hash === props.headHash
           />
           <div
             v-if="row.hash === expandedHash"
-            ref="detailsEl"
+            :ref="onDetailsRef"
+            class="git-graph-details-host"
           >
             <CommitDetails
               :details="expandedDetails"
