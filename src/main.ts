@@ -24,9 +24,9 @@ export default class GitGraphPlugin extends Plugin implements ViewHost {
 		this.settingsRef.value = this.settings;
 
 		this.registerView(GIT_GRAPH_VIEW, (leaf) => new GitGraphView(leaf, this));
-		this.addRibbonIcon(GIT_GRAPH_ICON, 'Open git graph', () => void this.activateView());
-		this.addCommand({ id: 'open', name: 'Open git graph', callback: () => void this.activateView() });
-		this.addCommand({ id: 'refresh', name: 'Refresh git graph', callback: () => this.refresh() });
+		this.addRibbonIcon(GIT_GRAPH_ICON, 'Open Git graph', () => void this.activateView());
+		this.addCommand({ id: 'open', name: 'Open', callback: () => void this.activateView() });
+		this.addCommand({ id: 'refresh', name: 'Refresh', callback: () => this.refresh() });
 		this.addSettingTab(new GitGraphSettingTab(this.app, this));
 
 		this.app.workspace.onLayoutReady(() => void this.initRepo());
