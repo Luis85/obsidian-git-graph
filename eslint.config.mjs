@@ -130,18 +130,17 @@ export default defineConfig([
 	{
 		files: ['src/view/store.ts'],
 		rules: {
-			// TODO(quality): createGraphStore has 107 lines (limit 80). `toggleExpand`,
-			// `refreshStatus`, `syncDirtyFiles` and `toggleDirty` were already pulled out as
-			// standalone factories (createExpandToggler/createStatusRefresher/createDirtySync/
-			// createDirtyToggler), and `applyLoad`/`fetchStatus`/`collapseDirty` were pulled
-			// out at module scope too; what remains inline is
-			// `visibleRows`/`collapse`/`load`/`loadMore`, which close over shared private
+			// TODO(quality): createGraphStore has 107 lines (limit 80). Every status read now
+			// lives in ./statusSync (createStatusSync) and `errorMessage` in ./errors, and
+			// `toggleExpand` (createExpandToggler), `applyLoad` and `groupRefs` sit at module scope.
+			// What remains inline is the initial `state` literal (one line per GraphState field)
+			// plus `visibleRows`/`collapse`/`load`/`loadMore`, which close over shared private
 			// state (state, byHash, generation, disposed) rather than forming one long
 			// procedural function. Pulling those out too would mean threading that shared
 			// mutable state through explicit parameters everywhere, which is a real refactor
-			// (arguably to a class), not a trivial behavior-preserving extraction. Out of
-			// scope for this task.
-			'max-lines-per-function': ['error', { max: 125, skipBlankLines: true, skipComments: true, IIFEs: true }],
+			// (arguably to a class), not a trivial behavior-preserving extraction. Out of scope
+			// for this task.
+			'max-lines-per-function': ['error', { max: 107, skipBlankLines: true, skipComments: true, IIFEs: true }],
 		},
 	},
 	// Must stay last: turns off eslint core/typescript-eslint/unicorn rules that oxlint
