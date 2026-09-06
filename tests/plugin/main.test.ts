@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, rmSync, watch } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync, watch } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
@@ -243,6 +243,27 @@ describe('GitGraphPlugin', () => {
 			expect(Notice.shown.at(-1)).toContain('outside this vault');
 			expect(app.workspace.opened).toHaveLength(1);
 			plugin.onunload();
+		});
+
+		it('opens a file from a vault reached through a junction or symlink to the repository', async () => {
+			const link = join(realpathSync.native(tmpdir()), `git-graph-vault-link-${process.pid}`);
+			symlinkSync(fixture.dir, link, 'junction');
+			try {
+				const plugin = makePlugin(link);
+				await plugin.onload();
+				await plugin.initRepo();
+				expect(plugin.repoState.value.kind).toBe('ready');
+				const app = plugin.app as unknown as App;
+				app.vault.files.set('renamed.md', { path: 'renamed.md' });
+				Notice.shown.length = 0;
+				plugin.openFile('renamed.md');
+				expect(Notice.shown).toEqual([]);
+				expect(app.workspace.opened).toEqual(['renamed.md']);
+				plugin.onunload();
+			} finally {
+				rmSync(link, { force: true });
+				expect(existsSync(join(fixture.dir, '.git'))).toBe(true);
+			}
 		});
 	});
 

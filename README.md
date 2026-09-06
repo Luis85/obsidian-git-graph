@@ -72,9 +72,3 @@ scenario and theme into `screenshots/`, and `npm run test:e2e` runs the Playwrig
 part of `npm run check`; run `test:e2e` before merging a change to `src/view/**` or
 `styles.css`. See [`harness/README.md`](harness/README.md) for the scenarios, the URL
 parameters and the `window.__harness` API.
-
-## Known limitations
-
-- A vault opened through a symlink or junction may report its files as outside the vault
-  when opening a file from the graph, since the repository root and the vault's base path
-  can resolve to different (non-symlinked) paths.
