@@ -1,3 +1,4 @@
+import { isReactive } from 'vue';
 import { describe, expect, it } from 'vitest';
 import type { RefFilter } from '../../src/git/types';
 import { createGraphStore } from '../../src/view/store';
@@ -185,6 +186,30 @@ describe('createGraphStore', () => {
 		live.dispose();
 		await live.refreshStatus();
 		expect(live.state.dirtyCount).toBe(2);
+	});
+
+	it('does not deep-proxy rows and commits', async () => {
+		const reader = new FakeReader();
+		reader.commits = linear(2);
+		const store = createGraphStore({ reader, settings: settings() });
+		await store.load();
+		expect(isReactive(store.state.rows)).toBe(false);
+		expect(isReactive(store.state.rows[0])).toBe(false);
+		expect(isReactive(store.state.commits[0])).toBe(false);
+		expect(isReactive(store.state)).toBe(true);
+	});
+
+	it('keeps the graph when only status fails, and reports the status error', async () => {
+		const reader = new FakeReader();
+		reader.commits = linear(2);
+		reader.changed = 1;
+		const store = createGraphStore({ reader, settings: settings() });
+		await store.load();
+		reader.failStatus = new Error('fatal: index locked');
+		await store.load();
+		expect(store.state.rows).toHaveLength(2);
+		expect(store.state.dirtyCount).toBe(1);
+		expect(store.state.error).toBe('fatal: index locked');
 	});
 
 	it('ignores results that arrive after dispose', async () => {

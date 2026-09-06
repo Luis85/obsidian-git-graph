@@ -1,6 +1,6 @@
-import { computed, reactive, type ComputedRef } from 'vue';
+import { computed, shallowReactive, type ComputedRef } from 'vue';
 import { GitError } from '../git/GitError';
-import type { Commit, CommitDetails, GitReader, Ref } from '../git/types';
+import type { Commit, CommitDetails, GitReader, Ref, RefsSnapshot } from '../git/types';
 import { emptyLayoutState, layoutGraph } from '../graph/layout';
 import type { LayoutState, Row } from '../graph/types';
 import type { GitGraphSettings } from '../settings/types';
@@ -77,6 +77,46 @@ function createExpandToggler(deps: GraphStoreDeps, state: GraphState, isDisposed
 	};
 }
 
+type StatusResult = { ok: true; changed: number } | { ok: false; error: string };
+
+/** Fetches status as a settled result: a rejection becomes `{ ok: false }` instead of failing the whole `load()`. */
+function fetchStatus(deps: GraphStoreDeps, showDirtyRow: boolean): Promise<StatusResult> {
+	return showDirtyRow
+		? deps.reader
+				.status()
+				.then((s) => ({ ok: true as const, changed: s.changed }))
+				.catch((e: unknown) => ({ ok: false as const, error: errorMessage(e) }))
+		: Promise.resolve({ ok: true as const, changed: 0 });
+}
+
+/** Applies a completed `load()`: rows/refs/head are replaced wholesale; a failed status keeps the previous `dirtyCount`. */
+function applyLoad(
+	state: GraphState,
+	byHash: Map<string, Commit>,
+	result: { commits: Commit[]; refs: RefsSnapshot; status: StatusResult; count: number },
+	collapse: () => void,
+): void {
+	const { commits, refs, status, count } = result;
+	const { rows, state: layout } = layoutGraph(commits, emptyLayoutState());
+	byHash.clear();
+	for (const c of commits) byHash.set(c.hash, c);
+	state.commits = commits;
+	state.rows = rows;
+	state.layout = layout;
+	state.refsByHash = groupRefs(refs.refs);
+	state.headHash = refs.headHash;
+	state.headBranch = refs.headBranch;
+	state.loadedCount = count;
+	state.hasMore = commits.length >= count;
+	if (state.expandedHash !== null && !byHash.has(state.expandedHash)) collapse();
+	if (status.ok) {
+		state.dirtyCount = status.changed;
+		state.error = null;
+	} else {
+		state.error = status.error;
+	}
+}
+
 /** Builds `refreshStatus`: re-runs `status()` only, generation-guarded like `load()`, never touching `rows`. */
 function createStatusRefresher(deps: GraphStoreDeps, state: GraphState, currentGeneration: () => number, isDisposed: () => boolean): () => Promise<void> {
 	return async function refreshStatus(): Promise<void> {
@@ -95,7 +135,7 @@ function createStatusRefresher(deps: GraphStoreDeps, state: GraphState, currentG
 }
 
 export function createGraphStore(deps: GraphStoreDeps): GraphStore {
-	const state = reactive<GraphState>({
+	const state = shallowReactive<GraphState>({
 		loading: false,
 		loadingMore: false,
 		error: null,
@@ -142,23 +182,10 @@ export function createGraphStore(deps: GraphStoreDeps): GraphStore {
 			const [commits, refs, status] = await Promise.all([
 				deps.reader.log({ skip: 0, count, refs: refFilter }),
 				deps.reader.refs(),
-				showDirtyRow ? deps.reader.status() : Promise.resolve({ changed: 0 }),
+				fetchStatus(deps, showDirtyRow),
 			]);
 			if (gen !== generation || disposed) return;
-			const { rows, state: layout } = layoutGraph(commits, emptyLayoutState());
-			byHash.clear();
-			for (const c of commits) byHash.set(c.hash, c);
-			state.commits = commits;
-			state.rows = rows;
-			state.layout = layout;
-			state.refsByHash = groupRefs(refs.refs);
-			state.headHash = refs.headHash;
-			state.headBranch = refs.headBranch;
-			state.dirtyCount = status.changed;
-			state.loadedCount = count;
-			state.hasMore = commits.length >= count;
-			state.error = null;
-			if (state.expandedHash !== null && !byHash.has(state.expandedHash)) collapse();
+			applyLoad(state, byHash, { commits, refs, status, count }, collapse);
 		} catch (e) {
 			if (gen !== generation || disposed) return;
 			state.error = errorMessage(e);
