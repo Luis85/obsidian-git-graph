@@ -6,6 +6,7 @@ const now = new Date('2026-09-06T12:00:00Z');
 describe('formatDate', () => {
 	it('formats relative distances', () => {
 		expect(formatDate('2026-09-06T11:59:40Z', 'relative', now)).toBe('just now');
+		expect(formatDate('2026-09-06T12:00:01Z', 'relative', now)).toBe('just now');
 		expect(formatDate('2026-09-06T11:55:00Z', 'relative', now)).toBe('5 minutes ago');
 		expect(formatDate('2026-09-06T09:00:00Z', 'relative', now)).toBe('3 hours ago');
 		expect(formatDate('2026-09-03T12:00:00Z', 'relative', now)).toBe('3 days ago');

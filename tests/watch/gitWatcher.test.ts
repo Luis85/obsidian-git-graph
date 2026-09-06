@@ -39,6 +39,10 @@ describe('createGitWatcher', () => {
 		writeFileSync(join(gitDir, 'HEAD'), 'ref: refs/heads/other\n');
 		writeFileSync(join(gitDir, 'refs', 'heads', 'main'), 'abc\n');
 		await vi.waitFor(() => expect(onChange).toHaveBeenCalledTimes(1), { timeout: 2000 });
+		// The waitFor above already observed the first call, so this trailing settle
+		// cannot false-fail; it proves the two events coalesced into one call.
+		await settle();
+		expect(onChange).toHaveBeenCalledTimes(1);
 	});
 
 	it('fires for a new ref inside refs/heads', async () => {
@@ -91,6 +95,8 @@ describe('createGitWatcher', () => {
 			await settle();
 			writeFileSync(join(common, 'refs', 'heads', 'shared'), 'abc\n');
 			await vi.waitFor(() => expect(onChange).toHaveBeenCalledTimes(1), { timeout: 2000 });
+			await settle();
+			expect(onChange).toHaveBeenCalledTimes(1);
 			writeFileSync(join(common, 'packed-refs'), '# pack-refs\n');
 			await vi.waitFor(() => expect(onChange).toHaveBeenCalledTimes(2), { timeout: 2000 });
 		} finally {
