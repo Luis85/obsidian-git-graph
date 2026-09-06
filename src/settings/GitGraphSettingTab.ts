@@ -21,7 +21,7 @@ export class GitGraphSettingTab extends PluginSettingTab {
 		return [
 			{
 				name: 'Git executable',
-				desc: 'Path or command used to run git. Leave as "git" to use the one on your PATH.',
+				desc: 'Path or command used to run Git. Leave as "git" to use the one on your path.',
 				control: { type: 'text', key: 'gitPath', placeholder: 'git' },
 			},
 			{
