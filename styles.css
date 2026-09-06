@@ -316,6 +316,17 @@
 	outline: 2px solid var(--background-modifier-border-focus);
 	outline-offset: -2px;
 }
+.git-graph-file-deleted {
+	cursor: default;
+}
+.git-graph-file-deleted:hover {
+	background: none;
+}
+.git-graph-file-deleted .git-graph-file-path,
+.git-graph-file-deleted:hover .git-graph-file-path {
+	color: var(--text-faint);
+	text-decoration: line-through;
+}
 .git-graph-file-path {
 	overflow: hidden;
 	text-overflow: ellipsis;

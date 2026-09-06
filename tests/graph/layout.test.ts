@@ -76,4 +76,20 @@ describe('layoutGraph', () => {
 		layoutGraph([c('A', 'B')], state);
 		expect(state).toEqual(emptyLayoutState());
 	});
+
+	it('never emits two segments with the same kind and lanes in one row (LaneCell keys on that triple)', () => {
+		const histories = [
+			[c('A', 'B'), c('B', 'C'), c('C')],
+			[c('M', 'A', 'B'), c('A', 'R'), c('B', 'R'), c('R')],
+			[c('M', 'A', 'B', 'C'), c('A'), c('B'), c('C')],
+			[c('A', 'B'), c('B'), c('C')],
+			[c('X', 'P'), c('Y', 'P'), c('P')],
+		];
+		for (const history of histories) {
+			for (const row of layoutGraph(history, emptyLayoutState()).rows) {
+				const keys = row.segments.map((s) => `${s.kind}:${s.fromLane}:${s.toLane}`);
+				expect(new Set(keys).size).toBe(keys.length);
+			}
+		}
+	});
 });

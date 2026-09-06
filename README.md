@@ -8,6 +8,7 @@ changes. Click a commit to see its full message and changed files.
 Read-only: the plugin never runs a git command that modifies the repository. Click a file in
 an expanded commit to open it in the editor (files outside the vault or no longer present show
 a notice). Click the changes row to see the uncommitted files; click a file to open it.
+Deleted files are shown struck through and cannot be opened.
 
 ## Requirements
 

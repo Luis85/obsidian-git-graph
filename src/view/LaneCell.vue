@@ -36,8 +36,8 @@ const nodeClasses = computed(() => ({
     aria-hidden="true"
   >
     <path
-      v-for="(s, i) in row.segments"
-      :key="i"
+      v-for="s in row.segments"
+      :key="`${s.kind}:${s.fromLane}:${s.toLane}`"
       :class="['git-graph-segment', `git-graph-lane-${s.color}`]"
       :d="pathFor(s)"
     />
