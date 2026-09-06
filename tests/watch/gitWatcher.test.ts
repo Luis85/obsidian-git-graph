@@ -1,7 +1,13 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync, watch, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+vi.mock('node:fs', async (importOriginal) => {
+	const actual = await importOriginal<typeof import('node:fs')>();
+	return { ...actual, watch: vi.fn(actual.watch) };
+});
+
 import { createGitWatcher, type GitWatcher } from '../../src/watch/gitWatcher';
 
 let gitDir: string;
@@ -95,6 +101,26 @@ describe('createGitWatcher', () => {
 			watcher?.dispose();
 			watcher = null;
 			rmSync(common, { recursive: true, force: true });
+		}
+	});
+
+	it('does not watch the git dir twice when commonDir is the same directory under another spelling', async () => {
+		const watchesFor = (commonDir?: string): number => {
+			vi.mocked(watch).mockClear();
+			const w = createGitWatcher(gitDir, () => undefined, commonDir === undefined ? {} : { commonDir });
+			const n = vi.mocked(watch).mock.calls.length;
+			w.dispose();
+			return n;
+		};
+		const plain = watchesFor();
+		expect(plain).toBeGreaterThan(0);
+		const link = join(realpathSync.native(tmpdir()), `git-graph-watch-link-${process.pid}`);
+		symlinkSync(gitDir, link, 'junction');
+		try {
+			expect(watchesFor(link)).toBe(plain);
+			if (process.platform === 'win32') expect(watchesFor(gitDir.toUpperCase())).toBe(plain);
+		} finally {
+			rmSync(link, { force: true });
 		}
 	});
 });

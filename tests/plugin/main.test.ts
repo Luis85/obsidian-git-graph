@@ -1,7 +1,13 @@
-import { mkdirSync, mkdtempSync, rmSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, watch } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
+
+vi.mock('node:fs', async (importOriginal) => {
+	const actual = await importOriginal<typeof import('node:fs')>();
+	return { ...actual, watch: vi.fn(actual.watch) };
+});
+
 import { App, FileSystemAdapter, Notice, Plugin as MockPlugin } from '../helpers/obsidian-mock';
 import GitGraphPlugin, { GIT_PATH_DEBOUNCE_MS } from '../../src/main';
 import { DEFAULT_SETTINGS } from '../../src/settings/types';
@@ -238,5 +244,21 @@ describe('GitGraphPlugin', () => {
 			expect(app.workspace.opened).toHaveLength(1);
 			plugin.onunload();
 		});
+	});
+
+	it.runIf(process.platform === 'win32')('watches a vault spelled in a different case than git reports exactly once', async () => {
+		const watchesDuring = async (basePath: string): Promise<number> => {
+			vi.mocked(watch).mockClear();
+			const plugin = makePlugin(basePath);
+			await plugin.onload();
+			await plugin.initRepo();
+			expect(plugin.repoState.value.kind).toBe('ready');
+			const n = vi.mocked(watch).mock.calls.length;
+			plugin.onunload();
+			return n;
+		};
+		const canonical = await watchesDuring(fixture.dir);
+		expect(canonical).toBeGreaterThan(0);
+		expect(await watchesDuring(fixture.dir.toUpperCase())).toBe(canonical);
 	});
 });
