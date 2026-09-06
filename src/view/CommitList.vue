@@ -36,7 +36,9 @@ const OVERSCAN = 5;
 const DETAILS_FALLBACK = 240;
 
 const container = ref<HTMLElement | null>(null);
-const detailsEl = ref<HTMLElement | null>(null);
+// A template ref bound inside `v-for` is always delivered as an array by Vue's compiler
+// (ref_for: true), even though the sibling v-if guarantees at most one match here.
+const detailsEl = ref<HTMLElement | HTMLElement[] | null>(null);
 const scrollTop = ref(0);
 const measuredViewport = ref(600);
 const detailsHeight = ref(DETAILS_FALLBACK);
@@ -90,9 +92,10 @@ onMounted(() => {
 	if (container.value) observer.observe(container.value);
 });
 
-watch(detailsEl, (el) => {
+watch(detailsEl, (raw) => {
 	detailsObserver?.disconnect();
 	detailsObserver = null;
+	const el = Array.isArray(raw) ? (raw[0] ?? null) : raw;
 	if (el === null || typeof ResizeObserver === 'undefined') return;
 	detailsObserver = new ResizeObserver(() => {
 		detailsHeight.value = el.offsetHeight || DETAILS_FALLBACK;

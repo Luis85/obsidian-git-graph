@@ -78,4 +78,37 @@ describe('CommitList', () => {
 		await nextTick();
 		expect(done.emitted('loadMore')).toBeUndefined();
 	});
+
+	it('observes the expanded details element (not an array) and grows the spacer to fit its measured height', async () => {
+		class FakeRO {
+			static instances: FakeRO[] = [];
+			observed: Element[] = [];
+			constructor(public cb: ResizeObserverCallback) {
+				FakeRO.instances.push(this);
+			}
+			observe(el: Element): void {
+				this.observed.push(el);
+			}
+			disconnect(): void {}
+		}
+		Object.defineProperty(window, 'ResizeObserver', { value: FakeRO, configurable: true });
+		try {
+			const w = mountList({ expandedHash: 'c1' });
+			await nextTick();
+
+			const containerEl = w.get('.git-graph-list').element;
+			const withDetails = FakeRO.instances.find((inst) => inst.observed.some((el) => el instanceof HTMLElement && el !== containerEl && el.querySelector('.git-graph-details')));
+			expect(withDetails).toBeDefined();
+			const el = withDetails!.observed.find((e) => e instanceof HTMLElement && e !== containerEl && e.querySelector('.git-graph-details')) as HTMLElement;
+			expect(el).toBeInstanceOf(HTMLElement);
+
+			Object.defineProperty(el, 'offsetHeight', { value: 100, configurable: true });
+			withDetails!.cb([], withDetails as never);
+			await nextTick();
+
+			expect(w.get('.git-graph-list-spacer').attributes('style')).toContain(`height: ${1000 * 22 + 100}px`);
+		} finally {
+			Reflect.deleteProperty(window, 'ResizeObserver');
+		}
+	});
 });
