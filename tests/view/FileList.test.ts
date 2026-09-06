@@ -33,12 +33,21 @@ describe('FileList', () => {
 		expect(mountList([]).get('.git-graph-files-empty').text()).toBe('No file changes');
 	});
 
-	it('keeps a rename and a modification of the same path apart when the list updates', async () => {
+	it('keeps a rename and a modification of the same path apart through a reorder that revisits the same paths', async () => {
 		const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
 		try {
-			const w = mountList([{ path: 'a.md', status: 'M' }]);
-			await w.setProps({ files: [{ path: 'a.md', status: 'R', oldPath: 'b.md' }, { path: 'a.md', status: 'M' }] });
-			expect(w.findAll('.git-graph-file')).toHaveLength(2);
+			const w = mountList([
+				{ path: 'a.md', status: 'M' },
+				{ path: 'b.md', status: 'M' },
+			]);
+			await w.setProps({
+				files: [
+					{ path: 'b.md', status: 'M' },
+					{ path: 'a.md', status: 'R', oldPath: 'c.md' },
+					{ path: 'a.md', status: 'M' },
+				],
+			});
+			expect(w.findAll('.git-graph-file')).toHaveLength(3);
 			expect(warn.mock.calls.flat().some((arg) => String(arg).includes('Duplicate keys'))).toBe(false);
 		} finally {
 			warn.mockRestore();
