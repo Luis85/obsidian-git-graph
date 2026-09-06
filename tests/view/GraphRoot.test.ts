@@ -90,13 +90,14 @@ describe('GraphRoot', () => {
 
 	it('sizes the dirty row by the first loaded row when HEAD is not loaded', async () => {
 		const reader = new FakeReader();
-		reader.commits = [commit('a', 'b'), commit('b', null)];
+		reader.commits = [{ ...commit('m', 'a'), parents: ['a', 'b'] }, commit('a', 'r'), commit('b', 'r'), commit('r', null)];
 		reader.refsSnapshot = { refs: [], headHash: 'zzz', headBranch: 'main' };
 		reader.changed = 1;
 		const w = mountRoot({ kind: 'ready', root: 'C:/vault', reader });
 		await flushPromises();
 		const rowSvg = w.get('.git-graph-row:not(.git-graph-row-dirty) svg');
 		expect(w.get('.git-graph-row-dirty svg').attributes('width')).toBe(rowSvg.attributes('width'));
+		expect(w.get('.git-graph-row-dirty svg').attributes('width')).toBe('32');
 	});
 
 	it('emits updateSettings when the ref filter changes and expands a row on click', async () => {

@@ -86,6 +86,7 @@ function createStatusRefresher(deps: GraphStoreDeps, state: GraphState, currentG
 			const status = await deps.reader.status();
 			if (gen !== currentGeneration() || isDisposed()) return;
 			state.dirtyCount = status.changed;
+			state.error = null;
 		} catch (e) {
 			if (gen !== currentGeneration() || isDisposed()) return;
 			state.error = errorMessage(e);

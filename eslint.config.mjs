@@ -130,12 +130,15 @@ export default defineConfig([
 	{
 		files: ['src/view/store.ts'],
 		rules: {
-			// TODO(quality): createGraphStore has 125 lines (limit 80). It is a closure-factory
-			// (load/loadMore/toggleExpand/collapse close over shared private state: state,
-			// byHash, generation, disposed) rather than one long procedural function; pulling
-			// those methods out to module scope would mean threading that shared mutable state
-			// through explicit parameters everywhere, which is a real refactor (arguably to a
-			// class), not a trivial behavior-preserving extraction. Out of scope for this task.
+			// TODO(quality): createGraphStore has 111 lines (limit 80). `toggleExpand` and
+			// `refreshStatus` were already pulled out as standalone factories
+			// (createExpandToggler/createStatusRefresher); what remains inline is
+			// `visibleRows`/`collapse`/`load`/`loadMore`, which close over shared private
+			// state (state, byHash, generation, disposed) rather than forming one long
+			// procedural function. Pulling those out too would mean threading that shared
+			// mutable state through explicit parameters everywhere, which is a real refactor
+			// (arguably to a class), not a trivial behavior-preserving extraction. Out of
+			// scope for this task.
 			'max-lines-per-function': ['error', { max: 125, skipBlankLines: true, skipComments: true, IIFEs: true }],
 		},
 	},

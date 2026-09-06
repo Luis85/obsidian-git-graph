@@ -196,6 +196,7 @@ describe('GitGraphPlugin', () => {
 			app.vault.trigger('create');
 			await vi.advanceTimersByTimeAsync(600);
 			expect(statusChanges).toBe(1);
+			expect(plugin.registeredEvents.map((r) => r.name)).toEqual(['modify', 'create', 'delete', 'rename']);
 			plugin.onunload();
 		});
 	});

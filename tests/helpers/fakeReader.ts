@@ -19,6 +19,7 @@ export class FakeReader implements GitReader {
 	logCalls: { skip: number; count: number; refs: RefFilter }[] = [];
 	statusCalls = 0;
 	failLog: Error | null = null;
+	failStatus: Error | null = null;
 	pendingLogs: ((c: Commit[]) => void)[] = [];
 	deferLog = false;
 	detailsResolvers: (() => void)[] = [];
@@ -34,6 +35,7 @@ export class FakeReader implements GitReader {
 	}
 	status(): Promise<{ changed: number }> {
 		this.statusCalls++;
+		if (this.failStatus) return Promise.reject(this.failStatus);
 		return Promise.resolve({ changed: this.changed });
 	}
 	commitDetails(hash: string): Promise<CommitDetails> {

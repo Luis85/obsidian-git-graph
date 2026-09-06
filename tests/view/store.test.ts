@@ -162,6 +162,14 @@ describe('createGraphStore', () => {
 		expect(store.state.dirtyCount).toBe(5);
 		expect(reader.logCalls).toHaveLength(1);
 		expect(reader.statusCalls).toBe(2);
+		reader.failStatus = new Error('fatal: status failed');
+		await store.refreshStatus();
+		expect(store.state.error).toBe('fatal: status failed');
+		reader.failStatus = null;
+		reader.changed = 7;
+		await store.refreshStatus();
+		expect(store.state.dirtyCount).toBe(7);
+		expect(store.state.error).toBeNull();
 	});
 
 	it('refreshStatus is a no-op when the dirty row is off or after dispose', async () => {
