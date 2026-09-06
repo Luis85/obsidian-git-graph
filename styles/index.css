@@ -1,0 +1,22 @@
+/* The plugin's stylesheet, as an import list.
+
+   Obsidian injects a plugin's styles.css as one blob, so an @import surviving into the
+   shipped file would resolve against the app rather than the plugin folder and silently
+   fetch nothing. These imports are therefore a BUILD instruction:
+   scripts/styles-assemble.mjs concatenates the files below, in this order, and that
+   concatenation is the whole build. Nothing but @import lines belongs in this file.
+
+   The order is load-bearing, and only in one direction: base.css declares the
+   --git-graph-lane-N variables that lanes.css resolves, so it comes first. Nothing else
+   here overrides anything else here — every partial owns its own class prefix — so the
+   remaining order is the reading order of the pane itself, top to bottom, and a new
+   partial goes where its part of the view is. */
+
+@import "./base.css";
+@import "./header.css";
+@import "./banner.css";
+@import "./emptyStates.css";
+@import "./rows.css";
+@import "./lanes.css";
+@import "./refs.css";
+@import "./details.css";

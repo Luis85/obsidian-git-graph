@@ -1,0 +1,28 @@
+import { mount } from '@vue/test-utils';
+import { describe, expect, it } from 'vitest';
+import GraphHeader from '../../src/view/GraphHeader.vue';
+
+const mountHeader = (over: Record<string, unknown> = {}) =>
+	mount(GraphHeader, { props: { repoName: 'my-vault', branch: 'main', refFilter: 'auto', filterText: '', loading: false, ...over } });
+
+describe('GraphHeader', () => {
+	it('shows repo name and branch, and "detached" when there is no branch', () => {
+		expect(mountHeader().get('.git-graph-title').text()).toContain('my-vault');
+		expect(mountHeader().get('.git-graph-branch').text()).toBe('main');
+		expect(mountHeader({ branch: null }).get('.git-graph-branch').text()).toBe('detached');
+	});
+
+	it('emits ref filter, filter text and refresh', async () => {
+		const w = mountHeader();
+		await w.get('select.git-graph-ref-filter').setValue('all');
+		expect(w.emitted('update:refFilter')).toEqual([['all']]);
+		await w.get('input.git-graph-filter').setValue('fix');
+		expect(w.emitted('update:filterText')).toEqual([['fix']]);
+		await w.get('button.git-graph-refresh').trigger('click');
+		expect(w.emitted('refresh')).toHaveLength(1);
+	});
+
+	it('disables refresh while loading', () => {
+		expect(mountHeader({ loading: true }).get('button.git-graph-refresh').attributes('disabled')).toBeDefined();
+	});
+});

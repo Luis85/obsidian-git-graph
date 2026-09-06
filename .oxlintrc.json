@@ -1,0 +1,39 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "plugins": ["typescript", "unicorn", "oxc", "vue"],
+  "categories": {
+    "correctness": "error",
+    "suspicious": "error"
+  },
+  "ignorePatterns": ["dist/**", "node_modules/**", ".obsidian/**", ".superpowers/**", "docs/**", "coverage/**", "harness-dist/**", "screenshots/**", "playwright-report/**", "test-results/**"],
+  "overrides": [
+    {
+      "files": ["harness/**/*.ts", "scripts/screenshot.mjs"],
+      "rules": {
+        // `window.__harness` is the agreed name for the harness's browser-side API. The
+        // double underscore marks it as an automation hook rather than part of the page's
+        // own surface, the same convention Playwright/Vue devtools use; it never appears
+        // in `src/`.
+        "no-underscore-dangle": ["error", { "allow": ["__harness"] }]
+      }
+    },
+    {
+      "files": ["src/util/emitter.ts"],
+      "rules": {
+        // `[...listeners]` snapshots the Set before iterating so a listener that
+        // unsubscribes itself (or another listener) mid-emit doesn't skip a callback
+        // that was already due to run. Removing the spread would change that behavior.
+        "unicorn/no-useless-spread": "off"
+      }
+    },
+    {
+      "files": ["src/view/CommitRow.vue"],
+      "rules": {
+        // `[...props.refs].sort(...)` already sorts a copy, never `props.refs` itself;
+        // `toSorted()` would be equivalent but needs an ES2023 lib target this project
+        // doesn't otherwise require, so the spread+sort form stays.
+        "unicorn/no-array-sort": "off"
+      }
+    }
+  ]
+}

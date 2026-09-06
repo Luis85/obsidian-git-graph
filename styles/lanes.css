@@ -1,0 +1,43 @@
+/* lanes */
+.git-graph-lanes {
+	flex: 0 0 auto;
+	display: block;
+	overflow: visible;
+}
+.git-graph-segment {
+	fill: none;
+	stroke: currentColor;
+	stroke-width: 2;
+}
+.git-graph-segment-dirty {
+	stroke-dasharray: 2 3;
+}
+.git-graph-node {
+	fill: currentColor;
+	stroke: var(--background-primary);
+	stroke-width: 1.5;
+}
+.git-graph-node-merge {
+	fill: var(--background-primary);
+	stroke: currentColor;
+	stroke-width: 2;
+}
+.git-graph-node-head {
+	stroke: currentColor;
+	stroke-width: 2;
+	fill: var(--background-primary);
+	r: 4.5;
+}
+.git-graph-node-dirty {
+	fill: var(--background-primary);
+	stroke: currentColor;
+	stroke-dasharray: 2 2;
+}
+.git-graph-lane-0 { color: var(--git-graph-lane-0); }
+.git-graph-lane-1 { color: var(--git-graph-lane-1); }
+.git-graph-lane-2 { color: var(--git-graph-lane-2); }
+.git-graph-lane-3 { color: var(--git-graph-lane-3); }
+.git-graph-lane-4 { color: var(--git-graph-lane-4); }
+.git-graph-lane-5 { color: var(--git-graph-lane-5); }
+.git-graph-lane-6 { color: var(--git-graph-lane-6); }
+.git-graph-lane-7 { color: var(--git-graph-lane-7); }

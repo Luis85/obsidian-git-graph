@@ -1,0 +1,7 @@
+/* empty states */
+.git-graph-empty {
+	padding: var(--size-4-4);
+	color: var(--text-muted);
+	font-size: var(--font-ui-small);
+	text-align: center;
+}

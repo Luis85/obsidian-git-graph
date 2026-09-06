@@ -1,0 +1,34 @@
+{
+  "$schema": "./node_modules/fallow/schema.json",
+  // fallow's built-in obsidian/vite/vitest/eslint/oxlint/typescript plugins already
+  // discover these as entries and already credit every toolchain devDependency as used
+  // (obsidian, @types/node, jsdom, vue-tsc, typescript, vitest, vite, eslint + its
+  // plugins, @vitejs/plugin-vue, @vue/test-utils, oxlint) via package.json, tsconfig.json,
+  // vite/vitest configs and eslint.config.mjs — verified with `npx fallow list` and a
+  // clean `npx fallow dead-code` run. These `entry` globs are listed explicitly anyway,
+  // per this project's convention of not relying on undocumented auto-detection.
+  // The harness entries: main.ts is loaded by harness/index.html, obsidian-stub.ts only ever
+  // reached through vite.harness.config.ts's resolve alias (fallow cannot follow that), and
+  // harness.spec.ts / playwright.config.ts / screenshot.mjs are run by npm scripts.
+  "entry": [
+    "src/main.ts",
+    "tests/**/*.test.ts",
+    "scripts/test-build.mjs",
+    "scripts/screenshot.mjs",
+    "scripts/audit.mjs",
+    "scripts/version-bump.mjs",
+    "scripts/changelog-notes.mjs",
+    "scripts/styles-assemble.mjs",
+    "vite.config.ts",
+    "harness/main.ts",
+    "harness/obsidian-stub.ts",
+    "harness/harness.spec.ts",
+    "playwright.config.ts",
+    "vite.harness.config.ts"
+  ],
+  // Checked fallow's schema.json (v3.22.0, `node_modules/fallow/schema.json`): `entry` takes
+  // plain glob strings with no per-entry role, and `ignoreDependencies` has no scoped/per-file
+  // form — so exempting `lucide` by name is the only way to say "harness-only, not production".
+  "ignoreDependencies": ["lucide"],
+  "ignorePatterns": ["dist/**", "node_modules/**", ".obsidian/**", ".superpowers/**", "docs/**", "coverage/**", "harness-dist/**", "screenshots/**", "playwright-report/**", "test-results/**"]
+}

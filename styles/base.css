@@ -1,0 +1,20 @@
+/* The view root, and the lane palette every other partial reads through currentColor.
+   Colors come from Obsidian's theme variables; the eight lane colors are overridable by a
+   user CSS snippet through --git-graph-lane-0 … --git-graph-lane-7, which is why they are
+   declared here as variables rather than inlined at the .git-graph-lane-N rules. */
+
+.git-graph-view,
+.git-graph-mount {
+	display: flex;
+	flex-direction: column;
+	height: 100%;
+	min-height: 0;
+	--git-graph-lane-0: var(--color-blue);
+	--git-graph-lane-1: var(--color-green);
+	--git-graph-lane-2: var(--color-orange);
+	--git-graph-lane-3: var(--color-purple);
+	--git-graph-lane-4: var(--color-pink);
+	--git-graph-lane-5: var(--color-cyan);
+	--git-graph-lane-6: var(--color-yellow);
+	--git-graph-lane-7: var(--color-red);
+}

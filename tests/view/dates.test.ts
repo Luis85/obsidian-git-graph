@@ -1,0 +1,34 @@
+import { describe, expect, it } from 'vitest';
+import { formatAbsolute, formatDate } from '../../src/view/dates';
+
+const now = new Date('2026-09-06T12:00:00Z');
+
+describe('formatDate', () => {
+	it('formats relative distances', () => {
+		expect(formatDate('2026-09-06T11:59:40Z', 'relative', now)).toBe('just now');
+		expect(formatDate('2026-09-06T12:00:01Z', 'relative', now)).toBe('just now');
+		expect(formatDate('2026-09-06T11:55:00Z', 'relative', now)).toBe('5 minutes ago');
+		expect(formatDate('2026-09-06T09:00:00Z', 'relative', now)).toBe('3 hours ago');
+		expect(formatDate('2026-09-03T12:00:00Z', 'relative', now)).toBe('3 days ago');
+		expect(formatDate('2026-08-06T12:00:00Z', 'relative', now)).toBe('1 month ago');
+		expect(formatDate('2024-09-06T12:00:00Z', 'relative', now)).toBe('2 years ago');
+	});
+
+	it('counts months and years by the calendar, not by 30-day blocks', () => {
+		expect(formatDate('2025-09-07T12:00:00Z', 'relative', now)).toBe('11 months ago'); // 364 days
+		expect(formatDate('2025-09-06T12:00:00Z', 'relative', now)).toBe('1 year ago');
+		expect(formatDate('2026-08-07T12:00:00Z', 'relative', now)).toBe('30 days ago');
+		expect(formatDate('2026-08-06T12:00:00Z', 'relative', now)).toBe('1 month ago');
+		expect(formatDate('2026-03-06T12:00:00Z', 'relative', now)).toBe('6 months ago');
+		expect(formatDate('2024-09-07T12:00:00Z', 'relative', now)).toBe('1 year ago'); // one day short of two
+	});
+
+	it('formats absolute dates in local time as YYYY-MM-DD HH:mm', () => {
+		expect(formatDate('2026-09-06T10:00:00Z', 'absolute', now)).toMatch(/^2026-09-0[567] \d\d:\d\d$/);
+		expect(formatAbsolute('2026-09-06T10:00:00Z')).toMatch(/^2026-09-0[567] \d\d:\d\d$/);
+	});
+
+	it('returns the input when it is not a date', () => {
+		expect(formatDate('garbage', 'relative', now)).toBe('garbage');
+	});
+});

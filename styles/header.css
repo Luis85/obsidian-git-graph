@@ -1,0 +1,43 @@
+/* header */
+.git-graph-header {
+	display: flex;
+	flex-direction: column;
+	gap: var(--size-4-1);
+	padding: var(--size-4-2) var(--size-4-3);
+	border-bottom: 1px solid var(--background-modifier-border);
+}
+.git-graph-title {
+	display: flex;
+	align-items: center;
+	gap: var(--size-4-1);
+	font-size: var(--font-ui-small);
+	font-weight: var(--font-semibold);
+	min-width: 0;
+}
+.git-graph-repo {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+.git-graph-branch {
+	color: var(--text-muted);
+	font-weight: var(--font-normal);
+}
+.git-graph-branch::before {
+	content: '·';
+	margin-right: var(--size-4-1);
+}
+.git-graph-tools {
+	display: flex;
+	align-items: center;
+	gap: var(--size-4-1);
+}
+.git-graph-tools .git-graph-ref-filter {
+	flex: 0 0 auto;
+	font-size: var(--font-ui-smaller);
+}
+.git-graph-tools .git-graph-filter {
+	flex: 1 1 auto;
+	min-width: 0;
+	font-size: var(--font-ui-smaller);
+}

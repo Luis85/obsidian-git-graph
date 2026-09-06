@@ -1,0 +1,83 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  # Named `verify` on purpose: release.yml refuses to publish a commit unless every check
+  # run whose name starts with `verify` concluded successfully on it. Renaming this job
+  # means updating that guard in the same edit, or the release workflow refuses everything
+  # with "no verify runs found".
+  verify:
+    # Both platforms, because a green Ubuntu run says nothing about the two things that
+    # differ and that this plugin actually touches: path separators and line endings. The
+    # git layer here compares paths it gets back from `git` against vault paths, and the
+    # tests pin a Windows 8.3 temp path quirk — neither is exercised on Ubuntu alone.
+    runs-on: ${{ matrix.os }}
+    strategy:
+      # Both legs report. A cancelled sibling is a leg whose result nobody has, and the
+      # question this matrix exists to answer is exactly which platform failed.
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      # The steps below are `npm run check`, split one per line so a red run names the
+      # gate that failed rather than the script that contains it. Keep them in step with
+      # package.json's `check`.
+      - name: Typecheck and build
+        run: npm run build
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Dead code (fallow)
+        run: npm run deadcode
+
+      - name: Lines of code budget
+        run: npm run loc
+
+      - name: Run tests with coverage thresholds
+        run: npm run test:coverage
+
+  # Its own job, never a step in `verify`, and that separation is the decision rather than
+  # a layout preference: `npm run check` is the offline definition of done and every step
+  # in it can be satisfied by the commit being written, while an advisory can be published
+  # with no patched version — a red nobody can clear. Keeping it here means a merge waits
+  # on it while a local `check` never does, and the two failures read differently because
+  # they are different.
+  #
+  # One platform, because an advisory is a fact about the dependency tree and the lockfile
+  # is the same on both. `--omit=dev` scopes it to what actually reaches a vault: this
+  # plugin ships one runtime dependency (vue), and everything else is build-time only.
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      # Run twice on failure, and the reason is not "networks are flaky": npm's arborist
+      # falls back from the bulk advisory endpoint to a quick-audit endpoint that npm is
+      # retiring and that intermittently answers 400, so one blip at the registry reds
+      # this job on work that has nothing to do with the supply chain. A retry cannot
+      # clear a real advisory, which is what keeps this a gate.
+      - name: Audit what ships
+        run: npm run audit || (sleep 30 && npm run audit)

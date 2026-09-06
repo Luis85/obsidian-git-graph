@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title>Git Graph harness</title>
+	</head>
+	<body>
+		<div class="harness-toolbar">
+			<label class="harness-field">Scenario <select id="harness-scenario"></select></label>
+			<label class="harness-field">Theme <select id="harness-theme"></select></label>
+			<label class="harness-field">Refs <select id="harness-refs"></select></label>
+			<button id="harness-emit" type="button">Emit change</button>
+			<span id="harness-description" class="harness-note"></span>
+		</div>
+		<!-- Set by harness/main.ts's onOpenFile handler; shows what openFile would have opened. -->
+		<div class="harness-toast" id="harness-toast"></div>
+		<!-- Sized by harness/main.ts from the width/height query parameters. GraphRoot mounts here. -->
+		<div id="app" class="harness-frame"></div>
+		<script type="module" src="./main.ts"></script>
+	</body>
+</html>
