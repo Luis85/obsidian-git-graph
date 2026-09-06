@@ -40,6 +40,11 @@ export class GitRepository implements GitReader {
 		return (await this.run(['rev-parse', '--absolute-git-dir'])).trim();
 	}
 
+	/** Shared git dir: same as gitDir() for a normal checkout, the main repository's .git for a linked worktree. */
+	async gitCommonDir(): Promise<string> {
+		return (await this.run(['rev-parse', '--path-format=absolute', '--git-common-dir'])).trim();
+	}
+
 	async log(opts: { skip: number; count: number; refs: RefFilter }): Promise<Commit[]> {
 		const selection = await this.refSelection(opts.refs);
 		if (selection === null) return [];

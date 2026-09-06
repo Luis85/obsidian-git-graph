@@ -43,6 +43,26 @@ describe('gitDir', () => {
 	it('is the absolute .git directory', async () => {
 		expect((await repo.gitDir()).replaceAll('\\', '/').toLowerCase()).toBe(join(fixture.dir, '.git').replaceAll('\\', '/').toLowerCase());
 	});
+
+	it('reports the common dir, which differs for a linked worktree', async () => {
+		expect((await repo.gitCommonDir()).replaceAll('\\', '/').toLowerCase()).toBe((await repo.gitDir()).replaceAll('\\', '/').toLowerCase());
+		const wt = realpathSync.native(mkdtempSync(join(tmpdir(), 'git-graph-wt-')));
+		rmSync(wt, { recursive: true, force: true });
+		try {
+			execFileSync('git', ['worktree', 'add', '-q', wt, 'feature'], { cwd: fixture.dir });
+			const linked = new GitRepository({ gitPath: 'git', cwd: wt });
+			const gitDir = (await linked.gitDir()).replaceAll('\\', '/').toLowerCase();
+			const common = (await linked.gitCommonDir()).replaceAll('\\', '/').toLowerCase();
+			expect(gitDir).toContain('/.git/worktrees/');
+			expect(common).toBe(join(fixture.dir, '.git').replaceAll('\\', '/').toLowerCase());
+		} finally {
+			try {
+				execFileSync('git', ['worktree', 'remove', '--force', wt], { cwd: fixture.dir });
+			} finally {
+				rmSync(wt, { recursive: true, force: true });
+			}
+		}
+	});
 });
 
 describe('log', () => {

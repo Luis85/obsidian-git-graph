@@ -47,6 +47,20 @@ describe('GitGraphPlugin', () => {
 		plugin.onunload();
 	});
 
+	it('rejects a relative gitPath from updateSettings without scheduling a re-init', async () => {
+		vi.useFakeTimers();
+		const plugin = makePlugin(fixture.dir);
+		await plugin.onload();
+		await plugin.initRepo();
+		const initRepoSpy = vi.spyOn(plugin, 'initRepo');
+		await plugin.updateSettings({ gitPath: './relative/git' });
+		expect(plugin.settings.gitPath).toBe('git');
+		await vi.advanceTimersByTimeAsync(GIT_PATH_DEBOUNCE_MS + 100);
+		expect(initRepoSpy).not.toHaveBeenCalled();
+		plugin.onunload();
+		vi.useRealTimers();
+	});
+
 	it('still registers the view and falls back to default settings when loadData rejects', async () => {
 		const plugin = makePlugin(fixture.dir);
 		plugin.loadData = () => Promise.reject(new Error('corrupt'));

@@ -27,7 +27,7 @@ export function runGit(gitPath: string, cwd: string, args: readonly string[], op
 				if (e.code === 'ENOENT') {
 					reject(new GitError('ENOENT', args, stderr, null));
 				} else if (e.code === 'ERR_CHILD_PROCESS_STDIO_MAXBUFFER') {
-					reject(new GitError('EXIT', args, 'git output exceeded the 64 MiB buffer', null));
+					reject(new GitError('EXIT', args, `git output exceeded the ${Math.floor(maxBuffer / (1024 * 1024))} MiB buffer`, null));
 				} else if (e.killed === true || e.signal === 'SIGTERM') {
 					reject(new GitError('TIMEOUT', args, stderr, null));
 				} else {

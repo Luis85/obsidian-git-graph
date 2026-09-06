@@ -1,5 +1,5 @@
 import { PluginSettingTab, type App, type SettingDefinitionItem } from 'obsidian';
-import { MAX_PAGE_SIZE, MIN_PAGE_SIZE, type GitGraphSettings } from './types';
+import { isValidGitPath, MAX_PAGE_SIZE, MIN_PAGE_SIZE, type GitGraphSettings } from './types';
 
 export interface SettingsHost {
 	settings: GitGraphSettings;
@@ -22,7 +22,12 @@ export class GitGraphSettingTab extends PluginSettingTab {
 			{
 				name: 'Git executable',
 				desc: 'Path or command used to run Git. Leave as "git" to use the one on your path.',
-				control: { type: 'text', key: 'gitPath', placeholder: 'git' },
+				control: {
+					type: 'text',
+					key: 'gitPath',
+					placeholder: 'git',
+					validate: (v) => (isValidGitPath(v) ? undefined : 'Enter a command on your PATH or an absolute path.'),
+				},
 			},
 			{
 				name: 'Refs to show',
@@ -63,8 +68,11 @@ export class GitGraphSettingTab extends PluginSettingTab {
 
 	setControlValue(key: string, value: unknown): Promise<void> {
 		switch (key as Key) {
-			case 'gitPath':
-				return this.host.updateSettings({ gitPath: String(value).trim() || 'git' });
+			case 'gitPath': {
+				const trimmed = String(value).trim();
+				if (!isValidGitPath(trimmed)) return Promise.resolve();
+				return this.host.updateSettings({ gitPath: trimmed });
+			}
 			case 'refFilter':
 				return this.host.updateSettings({ refFilter: value === 'all' ? 'all' : 'auto' });
 			case 'pageSize': {

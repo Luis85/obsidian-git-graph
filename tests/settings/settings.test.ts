@@ -1,7 +1,7 @@
 import type { App } from 'obsidian';
 import { describe, expect, it, vi } from 'vitest';
 import { GitGraphSettingTab } from '../../src/settings/GitGraphSettingTab';
-import { DEFAULT_SETTINGS, normalizeSettings } from '../../src/settings/types';
+import { DEFAULT_SETTINGS, isValidGitPath, normalizeSettings } from '../../src/settings/types';
 import { App as MockApp } from '../helpers/obsidian-mock';
 
 describe('normalizeSettings', () => {
@@ -23,6 +23,15 @@ describe('normalizeSettings', () => {
 		});
 		expect(normalizeSettings({ gitPath: '', refFilter: 'some', pageSize: 0, showDirtyRow: 'yes', dateFormat: 3 })).toEqual(DEFAULT_SETTINGS);
 		expect(normalizeSettings({ pageSize: 99999 }).pageSize).toBe(5000);
+	});
+
+	it('rejects a relative path as the git executable but keeps commands and absolute paths', () => {
+		expect(normalizeSettings({ gitPath: './tools/git' }).gitPath).toBe('git');
+		expect(normalizeSettings({ gitPath: 'tools\\git.exe' }).gitPath).toBe('git');
+		expect(normalizeSettings({ gitPath: 'git.exe' }).gitPath).toBe('git.exe');
+		expect(normalizeSettings({ gitPath: 'C:\\Git\\bin\\git.exe' }).gitPath).toBe('C:\\Git\\bin\\git.exe');
+		expect(normalizeSettings({ gitPath: '/usr/bin/git' }).gitPath).toBe('/usr/bin/git');
+		expect(isValidGitPath('../git')).toBe(false);
 	});
 });
 
@@ -65,6 +74,9 @@ describe('GitGraphSettingTab', () => {
 		await tab.setControlValue('gitPath', 'C:/git/bin/git.exe');
 		expect(host.updateSettings).toHaveBeenLastCalledWith({ gitPath: 'C:/git/bin/git.exe' });
 
+		await tab.setControlValue('gitPath', './relative/git');
+		expect(host.updateSettings).toHaveBeenCalledTimes(1);
+
 		await tab.setControlValue('refFilter', 'all');
 		expect(host.updateSettings).toHaveBeenLastCalledWith({ refFilter: 'all' });
 
@@ -79,6 +91,21 @@ describe('GitGraphSettingTab', () => {
 
 		await tab.setControlValue('dateFormat', 'absolute');
 		expect(host.updateSettings).toHaveBeenLastCalledWith({ dateFormat: 'absolute' });
+	});
+
+	it('the gitPath control validates a bare command or absolute path', () => {
+		const { tab } = makeTab();
+		const defs = tab.getSettingDefinitions();
+		const gitPathDef = defs[0];
+		if (!gitPathDef || !('control' in gitPathDef) || !gitPathDef.control || gitPathDef.control.type !== 'text') {
+			throw new Error('expected the gitPath text control');
+		}
+		const validate = gitPathDef.control.validate;
+		if (!validate) throw new Error('expected a validate function');
+
+		expect(validate('./git')).toEqual(expect.any(String));
+		expect(validate('git')).toBeUndefined();
+		expect(validate('C:\\Git\\bin\\git.exe')).toBeUndefined();
 	});
 
 	it('the pageSize control validates whole numbers within range', () => {

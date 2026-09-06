@@ -74,11 +74,9 @@ export default class GitGraphPlugin extends Plugin implements ViewHost {
 				this.repoState.value = { kind: 'none' };
 				return;
 			}
-			const gitDir = await reader.gitDir();
-			if (gen !== this.initGeneration) return;
-			this.watcher = createGitWatcher(gitDir, () => this.changes.emit(), {
-				onError: () => new Notice('Git graph: automatic refresh is unavailable. Use the refresh button.'),
-			});
+			const watcher = await this.resolveWatcher(reader, gen);
+			if (watcher === null) return;
+			this.watcher = watcher;
 			if (this.openViews === 0) this.watcher.pause();
 			this.repoState.value = { kind: 'ready', root, reader };
 		} catch (e) {
@@ -89,6 +87,18 @@ export default class GitGraphPlugin extends Plugin implements ViewHost {
 				this.repoState.value = { kind: 'error', message: e instanceof Error ? e.message : String(e) };
 			}
 		}
+	}
+
+	/** Resolves gitDir/commonDir and builds the watcher, bailing out (returning null) if a newer initRepo() has since started. */
+	private async resolveWatcher(reader: GitRepository, gen: number): Promise<GitWatcher | null> {
+		const gitDir = await reader.gitDir();
+		if (gen !== this.initGeneration) return null;
+		const commonDir = await reader.gitCommonDir();
+		if (gen !== this.initGeneration) return null;
+		return createGitWatcher(gitDir, () => this.changes.emit(), {
+			commonDir,
+			onError: () => new Notice('Git graph: automatic refresh is unavailable. Use the refresh button.'),
+		});
 	}
 
 	async updateSettings(patch: Partial<GitGraphSettings>): Promise<void> {

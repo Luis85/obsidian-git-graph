@@ -1,5 +1,5 @@
 import { existsSync, watch, type FSWatcher } from 'node:fs';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 
 export interface GitWatcher {
 	pause(): void;
@@ -10,6 +10,12 @@ export interface GitWatcher {
 export interface GitWatcherOptions {
 	debounceMs?: number;
 	onError?: (error: unknown) => void;
+	/**
+	 * The shared git dir for a linked worktree (`GitRepository.gitCommonDir()`). When given and
+	 * different from `gitDir`, its `refs/` and `packed-refs` are watched too, since branch/tag
+	 * updates for a linked worktree land there rather than in the per-worktree gitDir.
+	 */
+	commonDir?: string;
 }
 
 const FILES = ['HEAD', 'packed-refs', 'index', join('logs', 'HEAD')];
@@ -19,6 +25,34 @@ const REF_DIRS = ['heads', 'remotes', 'tags'].map((d) => join('refs', d));
 // forwarding unrelated directory-level noise (e.g. a `refs` entry touched by the recursive
 // refs/ watch) as a spurious extra change.
 const DIRECT_RENAME_FILES = new Set(['HEAD', 'packed-refs', 'index']);
+
+type AddFn = (path: string, recursive: boolean, listener?: (eventType: string, filename: string | Buffer | null) => void) => boolean;
+type DirListener = (eventType: string, filename: string | Buffer | null) => void;
+
+/** Watches `<dir>/refs` recursively where supported, falling back to one watch per ref subdirectory. */
+function watchRefs(dir: string, add: AddFn): void {
+	if (!add(join(dir, 'refs'), true)) {
+		for (const refDir of REF_DIRS) add(join(dir, refDir), false);
+	}
+}
+
+function watchGitDir(dir: string, add: AddFn, onDirEvent: DirListener, report: (error: unknown) => void): void {
+	if (!existsSync(dir)) {
+		report(new Error(`git directory not found: ${dir}`));
+		return;
+	}
+	for (const file of FILES) add(join(dir, file), false);
+	add(dir, false, onDirEvent);
+	watchRefs(dir, add);
+}
+
+/** Also watches refs/ and packed-refs in the shared common dir of a linked worktree, when it differs from gitDir. */
+function watchCommonDir(commonDir: string | undefined, gitDir: string, add: AddFn, onDirEvent: DirListener): void {
+	if (commonDir === undefined || !existsSync(commonDir) || resolve(commonDir) === resolve(gitDir)) return;
+	add(join(commonDir, 'packed-refs'), false);
+	add(commonDir, false, onDirEvent);
+	watchRefs(commonDir, add);
+}
 
 export function createGitWatcher(gitDir: string, onChange: () => void, opts: GitWatcherOptions = {}): GitWatcher {
 	const debounceMs = opts.debounceMs ?? 500;
@@ -78,15 +112,8 @@ export function createGitWatcher(gitDir: string, onChange: () => void, opts: Git
 		if (DIRECT_RENAME_FILES.has(filename.toString())) schedule();
 	};
 
-	if (!existsSync(gitDir)) {
-		report(new Error(`git directory not found: ${gitDir}`));
-	} else {
-		for (const file of FILES) add(join(gitDir, file), false);
-		add(gitDir, false, onGitDirEvent);
-		if (!add(join(gitDir, 'refs'), true)) {
-			for (const dir of REF_DIRS) add(join(gitDir, dir), false);
-		}
-	}
+	watchGitDir(gitDir, add, onGitDirEvent, report);
+	watchCommonDir(opts.commonDir, gitDir, add, onGitDirEvent);
 
 	return {
 		pause() {

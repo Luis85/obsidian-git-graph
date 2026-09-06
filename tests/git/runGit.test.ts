@@ -44,6 +44,14 @@ describe('runGit', () => {
 		expect(err).toBeInstanceOf(GitError);
 		const gitErr = err as GitError;
 		expect(gitErr.code).toBe('EXIT');
-		expect(gitErr.stderr).toMatch(/buffer/);
+		expect(gitErr.stderr).toMatch(/exceeded the 0 MiB buffer/);
+	});
+
+	it('reports the actual configured maxBuffer size in the message', async () => {
+		const err = await runGit('node', cwd, ['-e', `process.stdout.write('x'.repeat(${3 * 1024 * 1024}))`], { maxBuffer: 2 * 1024 * 1024 }).catch(
+			(e: unknown) => e,
+		);
+		expect(err).toBeInstanceOf(GitError);
+		expect((err as GitError).stderr).toMatch(/2 MiB/);
 	});
 });
