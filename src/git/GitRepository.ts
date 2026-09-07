@@ -52,14 +52,14 @@ export class GitRepository implements GitReader {
 		return resolve(this.cwd, out);
 	}
 
-	async log(opts: { skip: number; count: number; refs: RefFilter; path?: string; fallbackPath?: string }): Promise<Commit[]> {
+	async log(opts: { skip: number; count: number; refs: RefFilter; path?: string; fallbackPaths?: readonly string[] }): Promise<Commit[]> {
 		const selection = await this.refSelection(opts.refs);
 		if (selection === null) return [];
 		if (opts.path === undefined) {
 			const out = await this.run(['log', '--topo-order', '-z', `--format=${LOG_FORMAT}`, `--skip=${opts.skip}`, `--max-count=${opts.count}`, ...selection, '--']);
 			return parseLog(out);
 		}
-		return this.logFollowing(selection, opts.skip, opts.count, opts.path, opts.fallbackPath);
+		return this.logFollowing(selection, opts.skip, opts.count, opts.path, opts.fallbackPaths ?? []);
 	}
 
 	/**
@@ -74,16 +74,22 @@ export class GitRepository implements GitReader {
 	 * (pathspec magic, git >= 1.9) anchors it to the root instead, and `literal` disables glob
 	 * interpretation so a note like `Meeting [2026].md` is not read as a character class.
 	 *
-	 * `fallbackPath` covers the window in which Obsidian has already renamed the open note but
+	 * `fallbackPaths` covers the window in which Obsidian has already renamed the open note but
 	 * the rename is not committed: no commit names the new path yet, so `--follow` on it is
-	 * empty and the pre-rename path is the only one git knows. The choice is made on the
-	 * unsliced result, so it does not depend on which page is being fetched — a path with any
-	 * history at all wins, even when this page of it happens to be past its last commit.
+	 * empty and only an earlier path is one git knows. They are tried newest first, because a
+	 * rename committed earlier in the chain makes the newer path the one whose history is
+	 * complete — `--follow` from an older path stops at that committed rename and misses
+	 * everything recorded under the newer one. The choice is made on the unsliced result, so it
+	 * does not depend on which page is being fetched — a path with any history at all wins, even
+	 * when this page of it happens to be past its last commit.
 	 */
-	private async logFollowing(selection: string[], skip: number, count: number, path: string, fallbackPath?: string): Promise<Commit[]> {
-		const commits = await this.runFollow(selection, skip + count, path);
-		if (commits.length > 0 || fallbackPath === undefined) return commits.slice(skip);
-		return (await this.runFollow(selection, skip + count, fallbackPath)).slice(skip);
+	private async logFollowing(selection: string[], skip: number, count: number, path: string, fallbackPaths: readonly string[]): Promise<Commit[]> {
+		for (const candidate of [path, ...fallbackPaths]) {
+			// Sequential on purpose: each path is only queried because the previous one was empty.
+			const commits = await this.runFollow(selection, skip + count, candidate);
+			if (commits.length > 0) return commits.slice(skip);
+		}
+		return [];
 	}
 
 	private async runFollow(selection: string[], max: number, path: string): Promise<Commit[]> {

@@ -164,7 +164,7 @@ describe('log with a path', () => {
 
 	// Obsidian renames the open note before git knows anything about the new name: until the
 	// rename is committed no commit contains it, so `--follow` on the new path is empty. The
-	// fallback is the path git still knows, and it only stands in while the new one has nothing.
+	// fallbacks are the paths git still knows, and they only stand in while the new one has nothing.
 	it('falls back to the pre-rename path while the rename is uncommitted', async () => {
 		const tmp = createEmptyRepo('git-graph-rename-');
 		try {
@@ -175,16 +175,47 @@ describe('log with a path', () => {
 			tmp.git('mv', 'a.md', 'b.md');
 			const renamed = new GitRepository({ gitPath: 'git', cwd: tmp.dir });
 			expect(await renamed.log({ skip: 0, count: 10, refs: 'all', path: 'b.md' })).toEqual([]);
-			const viaFallback = await renamed.log({ skip: 0, count: 10, refs: 'all', path: 'b.md', fallbackPath: 'a.md' });
+			const viaFallback = await renamed.log({ skip: 0, count: 10, refs: 'all', path: 'b.md', fallbackPaths: ['a.md'] });
 			expect(viaFallback.map((c) => c.hash)).toEqual([added]);
-			// Once git knows the new path, it wins: the fallback is never consulted.
+			// Once git knows the new path, it wins: the fallbacks are never consulted.
 			tmp.git('commit', '-q', '-m', 'Rename a.md to b.md');
 			const moved = tmp.git('rev-parse', 'HEAD');
 			writeFileSync(join(tmp.dir, 'b.md'), 'a\nmore\n');
 			tmp.git('commit', '-q', '-am', 'Edit b.md');
 			const edited = tmp.git('rev-parse', 'HEAD');
-			const commits = await renamed.log({ skip: 0, count: 10, refs: 'all', path: 'b.md', fallbackPath: 'a.md' });
+			const commits = await renamed.log({ skip: 0, count: 10, refs: 'all', path: 'b.md', fallbackPaths: ['a.md'] });
 			expect(commits.map((c) => c.hash)).toEqual([edited, moved, added]);
+		} finally {
+			tmp.dispose();
+		}
+	});
+
+	// A second rename after the first one was committed: git knows the file as `b.md`, so `a.md`
+	// is no longer the best guess — `--follow` from it stops at the rename and misses everything
+	// committed under `b.md`. The chain is therefore tried newest first, and the newest path with
+	// any history wins.
+	it('tries every earlier path of a renamed file, newest first', async () => {
+		const tmp = createEmptyRepo('git-graph-rename-chain-');
+		try {
+			writeFileSync(join(tmp.dir, 'a.md'), 'a\n');
+			tmp.git('add', '.');
+			tmp.git('commit', '-q', '-m', 'Add a.md');
+			const added = tmp.git('rev-parse', 'HEAD');
+			tmp.git('mv', 'a.md', 'b.md');
+			tmp.git('commit', '-q', '-m', 'Rename a.md to b.md');
+			const moved = tmp.git('rev-parse', 'HEAD');
+			writeFileSync(join(tmp.dir, 'b.md'), 'a\nmore\n');
+			tmp.git('commit', '-q', '-am', 'Edit b.md');
+			const edited = tmp.git('rev-parse', 'HEAD');
+			// The second rename is not committed, so no commit names c.md at all.
+			tmp.git('mv', 'b.md', 'c.md');
+			const chained = new GitRepository({ gitPath: 'git', cwd: tmp.dir });
+			const commits = await chained.log({ skip: 0, count: 10, refs: 'all', path: 'c.md', fallbackPaths: ['b.md', 'a.md'] });
+			expect(commits.map((c) => c.hash)).toEqual([edited, moved, added]);
+			// Why the order matters: the oldest path alone stops at the committed rename.
+			const oldestOnly = await chained.log({ skip: 0, count: 10, refs: 'all', path: 'c.md', fallbackPaths: ['a.md'] });
+			expect(oldestOnly.map((c) => c.hash)).not.toContain(edited);
+			expect(oldestOnly.length).toBeLessThan(commits.length);
 		} finally {
 			tmp.dispose();
 		}

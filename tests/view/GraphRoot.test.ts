@@ -176,6 +176,10 @@ describe('GraphRoot', () => {
 		await w.setProps({ activeFile: 'notes/b.md' });
 		await flushPromises();
 		expect(reader.logCalls).toHaveLength(calls + 1);
+		// The earlier paths of a renamed file travel with it; they are scope inputs of their own.
+		await w.setProps({ activeFile: 'notes/c.md', activeFileFallbacks: ['notes/b.md', 'notes/a.md'] });
+		await flushPromises();
+		expect(reader.logCalls.at(-1)).toMatchObject({ path: 'notes/c.md', fallbackPaths: ['notes/b.md', 'notes/a.md'] });
 		await w.get('button.git-graph-history-toggle').trigger('click');
 		await flushPromises();
 		expect(reader.logCalls.at(-1)?.path).toBeUndefined();

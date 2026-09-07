@@ -69,25 +69,31 @@ describe('createGraphStore history path', () => {
 		expect(store.state.error).toBe('fatal: bad revision');
 	});
 
-	// After Obsidian renames the open note, git only knows the old path until the rename is
-	// committed; the controller hands both down and the reader decides which one has history.
-	it('carries a fallback path into the log options and reloads when only the fallback changes', async () => {
+	// After Obsidian renames the open note, git only knows the earlier paths until the rename is
+	// committed; the controller hands them all down and the reader decides which one has history.
+	it('carries the fallback paths into the log options and reloads when only they change', async () => {
 		const reader = new FakeReader();
 		reader.commits = linear(2);
 		const store = createGraphStore({ reader, settings: settings() });
 		await store.load();
-		store.setHistoryPath('b.md', 'a.md');
+		store.setHistoryPath('c.md', ['b.md', 'a.md']);
 		await flushPromises();
-		expect(reader.logCalls.at(-1)).toEqual({ skip: 0, count: 3, refs: 'auto', path: 'b.md', fallbackPath: 'a.md' });
+		expect(reader.logCalls.at(-1)).toEqual({ skip: 0, count: 3, refs: 'auto', path: 'c.md', fallbackPaths: ['b.md', 'a.md'] });
 		const calls = reader.logCalls.length;
-		store.setHistoryPath('b.md', 'a.md');
+		// A fresh array with the same entries is the same scope: the check is element-wise.
+		store.setHistoryPath('c.md', ['b.md', 'a.md']);
 		await flushPromises();
 		expect(reader.logCalls).toHaveLength(calls);
-		// The rename is committed: same path, no fallback any more — still a scope change.
-		store.setHistoryPath('b.md');
+		// Dropping one of them is a scope change even though the path is unchanged.
+		store.setHistoryPath('c.md', ['b.md']);
 		await flushPromises();
 		expect(reader.logCalls).toHaveLength(calls + 1);
-		expect(reader.logCalls.at(-1)).not.toHaveProperty('fallbackPath');
+		expect(reader.logCalls.at(-1)).toEqual({ skip: 0, count: 3, refs: 'auto', path: 'c.md', fallbackPaths: ['b.md'] });
+		// The rename is committed: same path, no fallbacks any more — still a scope change.
+		store.setHistoryPath('c.md');
+		await flushPromises();
+		expect(reader.logCalls).toHaveLength(calls + 2);
+		expect(reader.logCalls.at(-1)).not.toHaveProperty('fallbackPaths');
 	});
 
 	it('drops a stale result when a history path change supersedes a pending one', async () => {

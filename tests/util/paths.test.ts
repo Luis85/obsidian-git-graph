@@ -5,13 +5,33 @@ import { describe, expect, it } from 'vitest';
 import { realPath, relativeWithin, samePath } from '../../src/util/paths';
 
 describe('paths', () => {
-	it('realPath canonicalizes an existing path and resolves a missing one', () => {
+	it('realPath canonicalizes an existing path and a missing one through its deepest existing ancestor', () => {
 		const dir = mkdtempSync(join(tmpdir(), 'git-graph-paths-'));
 		try {
 			expect(realPath(dir)).toBe(realpathSync.native(dir));
-			expect(realPath(join(dir, 'missing'))).toBe(resolve(join(dir, 'missing')));
+			// The tail does not exist, but the directory holding it does: the result is the
+			// canonical spelling of that directory plus the missing name, not the input spelling.
+			expect(realPath(join(dir, 'missing'))).toBe(join(realpathSync.native(dir), 'missing'));
 		} finally {
 			rmSync(dir, { recursive: true, force: true });
+		}
+	});
+
+	// A vault opened through a symlink or junction, with the file already renamed away on disk:
+	// the fallback path no longer exists, so realpath cannot canonicalize it directly. Resolving
+	// it lexically would keep the link spelling, and relativeWithin would then call the file
+	// outside a base git reports canonically — emptying the history of every renamed file.
+	it('realPath follows a link in the existing ancestors of a missing path', () => {
+		const base = mkdtempSync(join(tmpdir(), 'git-graph-paths-'));
+		const target = realpathSync.native(base);
+		const link = join(realpathSync.native(tmpdir()), `git-graph-paths-missing-${process.pid}`);
+		symlinkSync(target, link, 'junction');
+		try {
+			expect(realPath(join(link, 'missing', 'note.md'))).toBe(join(target, 'missing', 'note.md'));
+			expect(relativeWithin(target, join(link, 'gone.md'))).toBe('gone.md');
+		} finally {
+			rmSync(link, { force: true });
+			rmSync(base, { recursive: true, force: true });
 		}
 	});
 

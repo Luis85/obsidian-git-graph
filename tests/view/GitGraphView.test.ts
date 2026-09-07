@@ -21,7 +21,7 @@ function makeHost(repoState: RepoState = { kind: 'none' }): ViewHost {
 		changes: createEmitter<void>(),
 		statusChanges: createEmitter<void>(),
 		activeFile: shallowRef<string | null>(null),
-		activeFileFallback: shallowRef<string | null>(null),
+		activeFileFallbacks: shallowRef<readonly string[]>([]),
 		viewOpened: vi.fn(),
 		viewClosed: vi.fn(),
 		openFile: vi.fn(),
@@ -88,10 +88,10 @@ describe('GitGraphView', () => {
 		await flushPromises();
 		expect(reader.logCalls.at(-1)).toMatchObject({ path: 'notes/a.md' });
 
-		host.activeFileFallback.value = 'notes/a.md';
-		host.activeFile.value = 'notes/b.md';
+		host.activeFileFallbacks.value = ['notes/b.md', 'notes/a.md'];
+		host.activeFile.value = 'notes/c.md';
 		await flushPromises();
-		expect(reader.logCalls.at(-1)).toMatchObject({ path: 'notes/b.md', fallbackPath: 'notes/a.md' });
+		expect(reader.logCalls.at(-1)).toMatchObject({ path: 'notes/c.md', fallbackPaths: ['notes/b.md', 'notes/a.md'] });
 		await view.onClose();
 	});
 

@@ -1,16 +1,21 @@
 import { realpathSync } from 'node:fs';
-import { isAbsolute, relative, resolve } from 'node:path';
+import { basename, dirname, isAbsolute, join, relative, resolve } from 'node:path';
 
 /**
- * The canonical spelling of an existing path: symlinks and junctions followed, Windows 8.3
- * short names expanded and the on-disk case restored (`realpathSync.native`). A path that does
- * not exist falls back to `resolve()`, so callers can still compare it.
+ * The canonical spelling of a path: symlinks and junctions followed, Windows 8.3 short names
+ * expanded and the on-disk case restored (`realpathSync.native`). A path that does not exist is
+ * canonicalized as far as it does: the deepest existing ancestor is resolved and the missing
+ * tail re-appended. Resolving it lexically instead would keep the link's spelling, so a file
+ * that was renamed away inside a vault opened through a link would compare as outside it.
  */
 export function realPath(path: string): string {
 	try {
 		return realpathSync.native(path);
 	} catch {
-		return resolve(path);
+		const parent = dirname(path);
+		// A root directory is its own parent: stop before recursing forever.
+		if (parent === path) return resolve(path);
+		return join(realPath(parent), basename(path));
 	}
 }
 

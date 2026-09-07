@@ -8,7 +8,7 @@ import GraphHeader from './GraphHeader.vue';
 import type { RepoState } from './repoState';
 import { createGraphStore, type GraphStore } from './store';
 
-const props = defineProps<{ repoState: RepoState; settings: GitGraphSettings; changes: Emitter<void>; statusChanges: Emitter<void>; activeFile: string | null; activeFileFallback?: string | null }>();
+const props = defineProps<{ repoState: RepoState; settings: GitGraphSettings; changes: Emitter<void>; statusChanges: Emitter<void>; activeFile: string | null; activeFileFallbacks?: readonly string[] }>();
 const emit = defineEmits<{ updateSettings: [patch: Partial<GitGraphSettings>]; openFile: [path: string] }>();
 
 const store = shallowRef<GraphStore | null>(null);
@@ -40,10 +40,10 @@ watch(
 );
 
 // `store` is a source so a repository re-resolve re-applies history mode to the new store.
-// The fallback is the pre-rename path of `activeFile`, which git may still be the only one to
-// know; it is a scope input like the file itself, so it is watched alongside it.
-watch([historyActive, () => props.activeFile, () => props.activeFileFallback ?? null, store], ([active, file, fallback, s]) => {
-	s?.setHistoryPath(active ? file : null, active ? fallback : null);
+// The fallbacks are the earlier paths of `activeFile`, which git may still be the only ones to
+// know; they are a scope input like the file itself, so they are watched alongside it.
+watch([historyActive, () => props.activeFile, () => props.activeFileFallbacks ?? [], store], ([active, file, fallbacks, s]) => {
+	s?.setHistoryPath(active ? file : null, active ? fallbacks : []);
 });
 
 // Any settings change reloads: page size, ref filter and dirty row all affect what is fetched.
