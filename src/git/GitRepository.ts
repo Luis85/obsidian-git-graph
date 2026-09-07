@@ -105,13 +105,18 @@ export class GitRepository implements GitReader {
 		};
 	}
 
+	/**
+	 * Both status reads are scoped to `cwd` (the vault) with a `.` pathspec: for a vault nested
+	 * inside a larger repository, the plugin only sees vault file events, so counting sibling
+	 * paths would leave the row stale. For a vault at the repository root `.` is everything.
+	 */
 	async status(): Promise<{ changed: number }> {
-		const out = await this.run(['status', '--porcelain=v1', '--untracked-files=all']);
+		const out = await this.run(['status', '--porcelain=v1', '--untracked-files=all', '--', '.']);
 		return { changed: countStatus(out) };
 	}
 
 	async statusFiles(): Promise<ChangedFile[]> {
-		return parseStatus(await this.run(['status', '--porcelain=v1', '-z', '--untracked-files=all']));
+		return parseStatus(await this.run(['status', '--porcelain=v1', '-z', '--untracked-files=all', '--', '.']));
 	}
 
 	async commitDetails(hash: string): Promise<CommitDetails> {

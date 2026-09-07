@@ -22,7 +22,8 @@ Open the pane from the ribbon icon, or from the command palette: **Git Graph: Op
 **Git Graph: Refresh** re-reads the repository on demand; the pane also refreshes on its
 own when the repository's git state changes (commits, branches, checkouts). Working-tree
 edits (unstaged/staged file changes) refresh the changes row within about half a second
-while the pane is open; a git-state change still refreshes the whole graph.
+while the pane is open; a git-state change still refreshes the whole graph. When the vault
+is a folder inside a larger repository, the row counts only files under the vault.
 
 ## Settings
 
@@ -31,7 +32,7 @@ while the pane is open; a git-state change still refreshes the whole graph.
 | Git executable | `git` | Command or path used to run git. |
 | Refs to show | Auto | Auto: current branch, its upstream, default remote branch. All: every branch and tag. |
 | Commits per page | 200 | Loaded at once; more load as you scroll. |
-| Show working tree changes | on | Row above the newest commit with the uncommitted change count; click it for the file list. |
+| Show working tree changes | on | Row above the newest commit with the uncommitted change count for files inside the vault; click it for the file list. |
 | Date format | Relative | "3 days ago" or `YYYY-MM-DD HH:mm`. |
 
 ## Development

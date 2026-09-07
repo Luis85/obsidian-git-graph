@@ -170,6 +170,20 @@ describe('status', () => {
 		const files = await repo.statusFiles();
 		expect(files).toEqual(expect.arrayContaining([{ path: 'x.txt', status: 'A' }, { path: 'renamed.md', status: 'M' }]));
 	});
+
+	it('counts and lists only the files under cwd when cwd is a subdirectory of the repository', async () => {
+		const tmp = createFixtureRepo();
+		try {
+			mkdirSync(join(tmp.dir, 'sub'));
+			writeFileSync(join(tmp.dir, 'sub', 'inside.md'), 'inside\n');
+			writeFileSync(join(tmp.dir, 'outside.md'), 'outside\n');
+			const subRepo = new GitRepository({ gitPath: 'git', cwd: join(tmp.dir, 'sub') });
+			expect(await subRepo.status()).toEqual({ changed: 1 });
+			expect(await subRepo.statusFiles()).toEqual([{ path: 'sub/inside.md', status: 'A' }]);
+		} finally {
+			tmp.dispose();
+		}
+	});
 });
 
 describe('statusFiles', () => {
