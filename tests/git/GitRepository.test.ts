@@ -281,6 +281,33 @@ describe('log with a path', () => {
 		}
 	});
 
+	// The opposite trap: the rename a → b is committed, the note stays open (so `a.md` is still
+	// remembered as an earlier path), and later an unrelated file is committed at `a.md`. Now
+	// `a.md` is in HEAD again — but it is also present in the working tree, which an earlier path
+	// of an uncommitted rename never is. Only a path HEAD has and the working tree lacks counts.
+	it('ignores an earlier path that a new, unrelated file has taken over', async () => {
+		const tmp = createEmptyRepo('git-graph-reused-source-');
+		try {
+			writeFileSync(join(tmp.dir, 'a.md'), 'a\n');
+			tmp.git('add', '.');
+			tmp.git('commit', '-q', '-m', 'Add a.md');
+			const added = tmp.git('rev-parse', 'HEAD');
+			tmp.git('mv', 'a.md', 'b.md');
+			tmp.git('commit', '-q', '-m', 'Rename a.md to b.md');
+			const moved = tmp.git('rev-parse', 'HEAD');
+			writeFileSync(join(tmp.dir, 'a.md'), 'someone else\n');
+			tmp.git('add', '.');
+			tmp.git('commit', '-q', '-m', 'Add an unrelated a.md');
+			const stranger = tmp.git('rev-parse', 'HEAD');
+			const reused = new GitRepository({ gitPath: 'git', cwd: tmp.dir });
+			const commits = await reused.log({ skip: 0, count: 10, refs: 'all', path: 'b.md', fallbackPaths: ['a.md'] });
+			expect(commits.map((c) => c.hash)).toEqual([moved, added]);
+			expect(commits.map((c) => c.hash)).not.toContain(stranger);
+		} finally {
+			tmp.dispose();
+		}
+	});
+
 	it('omitting path still yields the full history', async () => {
 		const commits = await repo.log({ skip: 0, count: 200, refs: 'all' });
 		expect(commits).toHaveLength(5);

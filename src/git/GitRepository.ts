@@ -86,12 +86,14 @@ export class GitRepository implements GitReader {
 	 * Which name is the note's committed identity cannot be read off `path` alone: history found
 	 * under it may belong to a since-deleted stranger that had the same name, whether that
 	 * stranger is gone from HEAD or only from the working tree (in which case git sees no rename
-	 * at all, just a changed `b.md`). The earlier paths are the evidence: the newest one HEAD
-	 * still contains is where the note's commits live, so it is asked first. Once a rename is
-	 * committed its source has left HEAD, and `path` is asked first again.
+	 * at all, just a changed `b.md`). The earlier paths are the evidence — but only while they
+	 * look like the source of an uncommitted rename: still in HEAD, gone from the working tree.
+	 * The newest such path is where the note's commits live, so it is asked first. Once a rename
+	 * is committed its source has left HEAD, and `path` is asked first again; an earlier name a
+	 * new, unrelated file has since taken over is present in the working tree and so never counts.
 	 */
 	private async logFollowing(selection: string[], skip: number, count: number, path: string, fallbackPaths: readonly string[]): Promise<Commit[]> {
-		const identity = await this.newestInHead(fallbackPaths);
+		const identity = await this.newestRenamedAway(fallbackPaths);
 		const ordered = identity === null ? [path, ...fallbackPaths] : [identity, path, ...fallbackPaths.filter((p) => p !== identity)];
 		for (const candidate of ordered) {
 			// Sequential on purpose: each path is only queried because the previous one was empty.
@@ -101,11 +103,17 @@ export class GitRepository implements GitReader {
 		return [];
 	}
 
-	/** The first of `paths` that HEAD's tree contains (repository-relative; `<rev>:<path>` is always root-relative), or null. */
-	private async newestInHead(paths: readonly string[]): Promise<string | null> {
+	/**
+	 * The first of `paths` that HEAD contains but the working tree no longer has — what the
+	 * source of an uncommitted rename looks like, staged or not — or null. `git diff HEAD`
+	 * compares the working tree with HEAD; restricted to one path, a rename cannot pair up with
+	 * its destination, so the source shows as a plain deletion.
+	 */
+	private async newestRenamedAway(paths: readonly string[]): Promise<string | null> {
 		for (const path of paths) {
 			// Sequential on purpose: the newest path is the answer, later ones are only asked if it is absent.
-			if ((await this.tryRun(['cat-file', '-e', `HEAD:${path}`])) !== null) return path;
+			const deleted = await this.tryRun(['diff', '--name-only', '--diff-filter=D', 'HEAD', '--', `:(top,literal)${path}`]);
+			if (deleted !== null && deleted.trim().length > 0) return path;
 		}
 		return null;
 	}

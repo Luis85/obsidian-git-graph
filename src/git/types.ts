@@ -50,9 +50,9 @@ export interface GitReader {
 	 * stops a name like `Meeting [2026].md` being read as a glob.
 	 *
 	 * `fallbackPaths` are earlier paths of `path`, newest first, for the window in which a rename
-	 * is not committed: the newest of them that HEAD still contains is the note's committed
-	 * identity and is served first, so a stranger that once had the new name cannot stand in for
-	 * the open note; otherwise the first path with any history is served.
+	 * is not committed: the newest of them that HEAD still contains and the working tree lacks is
+	 * the note's committed identity and is served first, so a stranger that once had the new name
+	 * cannot stand in for the open note; otherwise the first path with any history is served.
 	 */
 	log(opts: { skip: number; count: number; refs: RefFilter; path?: string; fallbackPaths?: readonly string[] }): Promise<Commit[]>;
 	refs(): Promise<RefsSnapshot>;
