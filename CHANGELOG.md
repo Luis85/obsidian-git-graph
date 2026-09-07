@@ -20,6 +20,9 @@ See [RELEASING.md](RELEASING.md) for how this file is kept in step with a releas
 
 ## [Unreleased]
 
+### Changed
+- The graph lays out lanes the way VS Code's Git Graph does: the top commit's first-parent chain keeps the left lane all the way down, a side branch runs beside the graph until its parent's row and curves in there, and lanes slide left as soon as a line to their left ends, instead of a lane dying into a side branch and leaving a permanent gap.
+
 ## [0.1.0] - 2026-09-06
 
 ### Added

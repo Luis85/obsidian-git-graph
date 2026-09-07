@@ -262,6 +262,39 @@ const branches = (): Fixture =>
 		changed: 0,
 	});
 
+// A stacked feature branch: nested merges, and the tip's second parent (s1) reaching the shared
+// parent s12 before the tip's own first-parent chain does — the shape that keeps the left lane
+// honest and makes the side lanes slide in as the lines to their left end.
+const stacked = (): Fixture =>
+	fixture('stacked', {
+		commits: [
+			{ id: 's0', subject: "Merge remote-tracking branch 'origin/feature/costs' into feature/costs", parents: ['s2', 's1'] },
+			{ id: 's1', subject: 'Fix the review completeness check', parents: ['s12'] },
+			{ id: 's2', subject: "Merge branch 'feature/renovation' into feature/costs", parents: ['s9', 's3'] },
+			{ id: 's3', subject: "Merge branch 'feature/walls' into feature/renovation", parents: ['s10', 's4'] },
+			{ id: 's4', subject: "Merge branch 'feature/reference' into feature/walls", parents: ['s11', 's5'] },
+			{ id: 's5', subject: "Merge branch 'feature/room-naming' into feature/reference", parents: ['s7', 's6'] },
+			{ id: 's6', subject: 'Rename reaches the inspector heading', parents: ['s14'] },
+			{ id: 's7', subject: 'Drop a calibration the snapshot lacks', parents: ['s14'] },
+			{ id: 's11', subject: 'Every spatial code answers with its own sentence', parents: ['s13'] },
+			{ id: 's10', subject: 'A metadata-only renovation still writes the sidecar', parents: ['s13'] },
+			{ id: 's9', subject: 'Withhold the all-clear until planning has loaded', parents: ['s12'] },
+			{ id: 's12', subject: 'Integrate the renovation stack', parents: ['s15', 's13'] },
+			{ id: 's13', subject: 'Stop exporting the V2 schemas', parents: ['s14'] },
+			{ id: 's14', subject: 'Validate the structure draft against the sidecar', parents: ['s15'] },
+			{ id: 's15', subject: 'Implement connected materials and costs', parents: ['s16'] },
+			{ id: 's16', subject: 'Initial commit' },
+		],
+		refs: [
+			{ id: 's0', name: 'feature/costs', kind: 'branch', isHead: true, upstream: 'origin/feature/costs' },
+			{ id: 's0', name: 'origin/feature/costs', kind: 'remote' },
+			{ id: 's3', name: 'feature/renovation', kind: 'branch' },
+		],
+		headId: 's0',
+		headBranch: 'feature/costs',
+		changed: 0,
+	});
+
 const LONG_COUNT = 600;
 const LONG_VERBS = ['Add', 'Fix', 'Refactor', 'Document', 'Simplify', 'Speed up', 'Guard'] as const;
 const LONG_TOPICS = [
@@ -304,6 +337,7 @@ const FIXTURES: Record<string, () => Fixture> = {
 	merge: () => merge('merge', 0),
 	octopus,
 	branches,
+	stacked,
 	long,
 	dirty: () => ({ ...merge('dirty', 3), dirtyFiles: DIRTY_FILES }),
 	empty,
@@ -316,6 +350,7 @@ export const SCENARIOS: readonly Scenario[] = [
 	{ name: 'merge', description: 'A feature branch merged back into main — 8 commits, two lanes.' },
 	{ name: 'octopus', description: 'A three-parent octopus merge.' },
 	{ name: 'branches', description: 'Four open lanes, remotes and tags, with HEAD below the first row.' },
+	{ name: 'stacked', description: 'Nested feature merges: the left lane stays with the tip, side lanes slide in as lines end.' },
 	{ name: 'long', description: `${LONG_COUNT} commits, so scrolling to the bottom pages in more.` },
 	{ name: 'dirty', description: 'The merge history plus three uncommitted working tree changes; the changes row expands.' },
 	{ name: 'empty', description: 'A repository with no commits yet.' },

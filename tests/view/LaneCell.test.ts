@@ -13,6 +13,7 @@ const row: Row = {
 		{ kind: 'in', fromLane: 1, toLane: 1, color: 1 },
 		{ kind: 'out', fromLane: 1, toLane: 0, color: 1 },
 		{ kind: 'pass', fromLane: 0, toLane: 0, color: 0 },
+		{ kind: 'in', fromLane: 1, toLane: 0, color: 0 },
 	],
 };
 
@@ -23,17 +24,18 @@ describe('LaneCell', () => {
 		expect(svg.attributes('width')).toBe('32');
 		expect(svg.attributes('height')).toBe('22');
 		const paths = w.findAll('path');
-		expect(paths).toHaveLength(3);
+		expect(paths).toHaveLength(4);
 		expect(paths[0]?.classes()).toContain('git-graph-lane-1');
 		expect(paths[2]?.classes()).toContain('git-graph-lane-0');
 	});
 
-	it('draws straight lines for same-lane segments and curves for lane changes', () => {
+	it('draws straight lines for same-lane segments and, for a lane change, the two halves of one curve meeting at the row boundary', () => {
 		const w = mount(LaneCell, { props: { row, isHead: false } });
 		const d = w.findAll('path').map((p) => p.attributes('d') ?? '');
 		expect(d[0]).toBe('M 24 0 L 24 11');
-		expect(d[1]).toMatch(/^M 24 11 C .* 8 22$/);
+		expect(d[1]).toMatch(/^M 24 11 C .* 16 22$/);
 		expect(d[2]).toBe('M 8 0 L 8 22');
+		expect(d[3]).toMatch(/^M 16 0 C .* 8 11$/);
 	});
 
 	it('marks the node as merge and head', () => {

@@ -1,96 +1,200 @@
 import type { Commit } from '../git/types';
-import type { Lane, LayoutState, Row, Segment } from './types';
+import type { Row, Segment } from './types';
+
+/**
+ * The lane layout is a port of the algorithm behind VS Code's Git Graph extension
+ * (mhutchie/vscode-git-graph, web/graph.ts): paths are traced one at a time in row order,
+ * each following first parents down the list, and every row hands out its columns
+ * left-to-right in the order the paths reach it. That gives the graph its shape: the
+ * first-parent chain of the top commit owns column 0 all the way down, a line whose parent
+ * was already placed runs beside the graph until the parent's row and curves in there, and
+ * lines slide left as soon as a line to their left ends.
+ */
 
 const LANE_COLORS = 8;
+/** A parent that is not among the laid-out commits: its line runs off the bottom of the graph. */
+const EXTERNAL = -1;
+const NONE = -1;
 
-export function emptyLayoutState(): LayoutState {
-	return { lanes: [], nextColor: 0 };
+interface Vertex {
+	/** Vertex indexes, or `EXTERNAL`; a hash repeated in one commit's parent list is kept once. */
+	parents: number[];
+	nextParent: number;
+	/** Index into `Graph.branchColors`; `NONE` until a path places the vertex. */
+	branch: number;
+	x: number;
+	nextX: number;
+	/** Per column: what the line through that column is heading for, and on which branch. */
+	connections: { vertex: number; branch: number }[];
 }
 
-function firstFree(lanes: (Lane | null)[], from: number): number {
-	for (let i = from; i < lanes.length; i++) if (lanes[i] === null) return i;
-	return Math.max(from, lanes.length);
+/** One line of a path, from column `x1` on `row` to column `x2` on the row below. */
+interface Line { row: number; x1: number; x2: number; color: number }
+
+interface Graph {
+	vertices: Vertex[];
+	lines: Line[];
+	branchColors: number[];
+	/** Per color: the last row a path of that color touched, or Infinity while one is still running. */
+	colorEnds: number[];
 }
 
-function findWaiting(lanes: (Lane | null)[], hash: string, skip: ReadonlySet<number>): number {
-	return lanes.findIndex((lane, i) => lane !== null && !skip.has(i) && lane.waitingFor === hash);
+function buildVertices(commits: readonly Commit[]): Vertex[] {
+	const indexOf = new Map(commits.map((c, i) => [c.hash, i]));
+	return commits.map((c) => ({
+		parents: [...new Set(c.parents)].map((h) => indexOf.get(h) ?? EXTERNAL),
+		nextParent: 0,
+		branch: NONE,
+		x: 0,
+		nextX: 0,
+		connections: [],
+	}));
 }
 
-export function layoutGraph(commits: readonly Commit[], state: LayoutState): { rows: Row[]; state: LayoutState } {
-	const lanes: (Lane | null)[] = state.lanes.map((lane) => (lane === null ? null : { ...lane }));
-	let nextColor = state.nextColor;
-	const rows: Row[] = [];
+function nextParent(v: Vertex): number | null {
+	return v.parents[v.nextParent] ?? null;
+}
 
-	const open = (slot: number, waitingFor: string): Lane => {
-		const lane = { waitingFor, color: nextColor };
-		nextColor = (nextColor + 1) % LANE_COLORS;
-		while (lanes.length < slot) lanes.push(null);
-		lanes[slot] = lane;
-		return lane;
-	};
+function registerPoint(v: Vertex, x: number, vertex: number, branch: number): void {
+	if (x !== v.nextX) return;
+	v.nextX = x + 1;
+	v.connections[x] = { vertex, branch };
+}
 
-	for (const commit of commits) {
-		const segments: Segment[] = [];
-		const closing = new Set<number>();
-		const present = lanes.map((lane) => lane !== null);
+function pointConnectingTo(v: Vertex, vertex: number, branch: number): number {
+	return v.connections.findIndex((c) => c.vertex === vertex && c.branch === branch);
+}
 
-		let laneIndex = findWaiting(lanes, commit.hash, closing);
-		const isTip = laneIndex === -1;
-		if (isTip) {
-			laneIndex = firstFree(lanes, 0);
-			open(laneIndex, commit.hash);
-		}
-		const lane = lanes[laneIndex] as Lane;
-		const color = lane.color;
+function place(v: Vertex, branch: number, x: number): void {
+	if (v.branch !== NONE) return;
+	v.branch = branch;
+	v.x = x;
+}
 
-		if (!isTip) segments.push({ kind: 'in', fromLane: laneIndex, toLane: laneIndex, color });
+/** The lowest color whose last path ended above `startAt`, else a new one. */
+function availableColor(g: Graph, startAt: number): number {
+	const free = g.colorEnds.findIndex((end) => startAt > end);
+	if (free !== NONE) return free;
+	g.colorEnds.push(Infinity);
+	return g.colorEnds.length - 1;
+}
 
-		lanes.forEach((other, i) => {
-			if (other !== null && i !== laneIndex && other.waitingFor === commit.hash) {
-				segments.push({ kind: 'in', fromLane: i, toLane: laneIndex, color: other.color });
-				closing.add(i);
-			}
-		});
-
-		const [firstParent, ...otherParents] = commit.parents;
-		if (firstParent === undefined) {
-			closing.add(laneIndex);
-		} else {
-			const skip = new Set([...closing, laneIndex]);
-			const existing = findWaiting(lanes, firstParent, skip);
-			if (existing === -1) {
-				lane.waitingFor = firstParent;
-				segments.push({ kind: 'out', fromLane: laneIndex, toLane: laneIndex, color });
-			} else {
-				segments.push({ kind: 'out', fromLane: laneIndex, toLane: existing, color });
-				closing.add(laneIndex);
-			}
-			for (const parent of new Set(otherParents)) {
-				if (parent === firstParent) continue;
-				const target = findWaiting(lanes, parent, closing);
-				if (target !== -1) {
-					segments.push({ kind: 'out', fromLane: laneIndex, toLane: target, color: (lanes[target] as Lane).color });
-				} else {
-					const slot = firstFree(lanes, laneIndex + 1);
-					const opened = open(slot, parent);
-					segments.push({ kind: 'out', fromLane: laneIndex, toLane: slot, color: opened.color });
-				}
-			}
-		}
-
-		const closingIn = new Set(segments.filter((s) => s.kind === 'in' && s.fromLane !== laneIndex).map((s) => s.fromLane));
-		present.forEach((wasPresent, i) => {
-			if (wasPresent && i !== laneIndex && !closingIn.has(i)) {
-				segments.push({ kind: 'pass', fromLane: i, toLane: i, color: (lanes[i] as Lane).color });
-			}
-		});
-
-		const touched = [laneIndex, ...segments.flatMap((s) => [s.fromLane, s.toLane])];
-		rows.push({ hash: commit.hash, lane: laneIndex, color, isMerge: commit.parents.length > 1, segments, laneCount: Math.max(...touched) + 1 });
-
-		for (const i of closing) lanes[i] = null;
-		while (lanes.length > 0 && lanes[lanes.length - 1] === null) lanes.pop();
+/**
+ * A merge whose parent is already placed: run beside the graph until a row where a line is
+ * already heading for that parent on its branch, and join it there. The line is drawn in the
+ * parent's color.
+ */
+function connectToPlaced(g: Graph, startAt: number, parent: number): void {
+	const v = g.vertices[startAt] as Vertex;
+	const branch = (g.vertices[parent] as Vertex).branch;
+	const color = g.branchColors[branch] as number;
+	let lastX = v.x;
+	for (let i = startAt + 1; i < g.vertices.length; i++) {
+		const cur = g.vertices[i] as Vertex;
+		const joinX = pointConnectingTo(cur, parent, branch);
+		const x = joinX === NONE ? cur.nextX : joinX;
+		g.lines.push({ row: i - 1, x1: lastX, x2: x, color });
+		registerPoint(cur, x, parent, branch);
+		lastX = x;
+		if (joinX !== NONE) break;
 	}
+	v.nextParent++;
+}
 
-	return { rows, state: { lanes, nextColor } };
+/**
+ * A new path: place the start vertex if it is not placed yet, then follow first parents,
+ * placing each unplaced parent and continuing from it, until a parent that is already placed
+ * (curve into it), a root, or a parent outside the loaded commits (run off the bottom).
+ */
+function followChain(g: Graph, startAt: number): void {
+	const branch = g.branchColors.length;
+	const color = availableColor(g, startAt);
+	g.branchColors.push(color);
+	let v = g.vertices[startAt] as Vertex;
+	let parent = nextParent(v);
+	let lastX = v.branch === NONE ? v.nextX : v.x;
+	let end = startAt;
+	place(v, branch, lastX);
+	registerPoint(v, lastX, startAt, branch);
+	for (let i = startAt + 1; i < g.vertices.length && parent !== null; i++) {
+		const cur = g.vertices[i] as Vertex;
+		const reached = parent === i;
+		const x = reached && cur.branch !== NONE ? cur.x : cur.nextX;
+		g.lines.push({ row: i - 1, x1: lastX, x2: x, color });
+		registerPoint(cur, x, parent, branch);
+		lastX = x;
+		end = i;
+		if (!reached) continue;
+		v.nextParent++;
+		const wasPlaced = cur.branch !== NONE;
+		place(cur, branch, x);
+		v = cur;
+		parent = wasPlaced ? null : nextParent(cur);
+	}
+	// The parent is outside the loaded commits (or, with a malformed order, above its child):
+	// the line runs off the bottom of the last row, and the parent counts as handled.
+	if (parent !== null) {
+		v.nextParent++;
+		g.lines.push({ row: g.vertices.length - 1, x1: lastX, x2: lastX, color });
+	}
+	g.colorEnds[color] = end;
+}
+
+function tracePaths(commits: readonly Commit[]): Graph {
+	const g: Graph = { vertices: buildVertices(commits), lines: [], branchColors: [], colorEnds: [] };
+	let i = 0;
+	while (i < g.vertices.length) {
+		const v = g.vertices[i] as Vertex;
+		const parent = nextParent(v);
+		if (v.branch !== NONE && parent === null) {
+			i++;
+		} else if (parent !== null && parent !== EXTERNAL && v.parents.length > 1 && v.branch !== NONE && (g.vertices[parent] as Vertex).branch !== NONE) {
+			connectToPlaced(g, i, parent);
+		} else {
+			followChain(g, i);
+		}
+	}
+	return g;
+}
+
+const segment = (kind: Segment['kind'], line: Line): Segment => ({ kind, fromLane: line.x1, toLane: line.x2, color: line.color % LANE_COLORS });
+
+/**
+ * A line is drawn as an `out` half on the row it leaves and an `in` half on the row it
+ * reaches; a straight line through a row that is not the commit's own column collapses to
+ * one `pass`.
+ */
+function rowSegments(ins: readonly Line[], outs: readonly Line[], nodeLane: number): Segment[] {
+	const segments: Segment[] = [];
+	const remaining = new Set(outs);
+	for (const line of ins) {
+		const through = line.x1 === line.x2 && line.x2 !== nodeLane
+			? outs.find((o) => remaining.has(o) && o.x1 === line.x2 && o.x2 === line.x2 && o.color === line.color)
+			: undefined;
+		if (through === undefined) {
+			segments.push(segment('in', line));
+			continue;
+		}
+		remaining.delete(through);
+		segments.push(segment('pass', line));
+	}
+	for (const line of outs) if (remaining.has(line)) segments.push(segment('out', line));
+	return segments;
+}
+
+export function layoutGraph(commits: readonly Commit[]): Row[] {
+	const g = tracePaths(commits);
+	const outs: Line[][] = commits.map(() => []);
+	const ins: Line[][] = commits.map(() => []);
+	for (const line of g.lines) {
+		(outs[line.row] as Line[]).push(line);
+		ins[line.row + 1]?.push(line);
+	}
+	return commits.map((commit, i) => {
+		const v = g.vertices[i] as Vertex;
+		const segments = rowSegments(ins[i] as Line[], outs[i] as Line[], v.x);
+		const touched = [v.x, ...segments.flatMap((s) => [s.fromLane, s.toLane])];
+		const color = (g.branchColors[v.branch] as number) % LANE_COLORS;
+		return { hash: commit.hash, lane: v.x, color, isMerge: commit.parents.length > 1, segments, laneCount: Math.max(...touched) + 1 };
+	});
 }

@@ -1,7 +1,7 @@
 import { computed, shallowReactive, type ComputedRef } from 'vue';
 import type { Commit, CommitDetails, GitReader, Ref, RefsSnapshot } from '../git/types';
-import { emptyLayoutState, layoutGraph } from '../graph/layout';
-import type { LayoutState, Row } from '../graph/types';
+import { layoutGraph } from '../graph/layout';
+import type { Row } from '../graph/types';
 import type { GitGraphSettings } from '../settings/types';
 import { errorMessage } from './errors';
 import { createStatusSync, type StatusState } from './statusSync';
@@ -17,7 +17,6 @@ export interface GraphState extends StatusState {
 	error: string | null;
 	commits: Commit[];
 	rows: Row[];
-	layout: LayoutState;
 	refsByHash: Map<string, Ref[]>;
 	headHash: string | null;
 	headBranch: string | null;
@@ -76,12 +75,10 @@ function createExpandToggler(deps: GraphStoreDeps, state: GraphState, isDisposed
 /** Applies a completed `load()`: rows/refs/head are replaced wholesale. Status is applied separately, by `statusSync`. */
 function applyLoad(state: GraphState, byHash: Map<string, Commit>, result: { commits: Commit[]; refs: RefsSnapshot; count: number }, collapse: () => void): void {
 	const { commits, refs, count } = result;
-	const { rows, state: layout } = layoutGraph(commits, emptyLayoutState());
 	byHash.clear();
 	for (const c of commits) byHash.set(c.hash, c);
 	state.commits = commits;
-	state.rows = rows;
-	state.layout = layout;
+	state.rows = layoutGraph(commits);
 	state.refsByHash = groupRefs(refs.refs);
 	state.headHash = refs.headHash;
 	state.headBranch = refs.headBranch;
@@ -98,7 +95,6 @@ export function createGraphStore(deps: GraphStoreDeps): GraphStore {
 		statusError: null,
 		commits: [],
 		rows: [],
-		layout: emptyLayoutState(),
 		refsByHash: new Map(),
 		headHash: null,
 		headBranch: null,
@@ -169,11 +165,9 @@ export function createGraphStore(deps: GraphStoreDeps): GraphStore {
 		try {
 			const page = await deps.reader.log({ skip, count: pageSize, refs: refFilter });
 			if (gen !== generation || disposed) return;
-			const { rows, state: layout } = layoutGraph(page, state.layout);
 			for (const c of page) byHash.set(c.hash, c);
 			state.commits = [...state.commits, ...page];
-			state.rows = [...state.rows, ...rows];
-			state.layout = layout;
+			state.rows = layoutGraph(state.commits);
 			state.loadedCount = skip + pageSize;
 			state.hasMore = page.length >= pageSize;
 			state.error = null;
