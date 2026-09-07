@@ -381,7 +381,7 @@ export function scenarioCommits(name: string): Commit[] {
 	return fixtureFor(name).commits;
 }
 
-const delay = (ms: number): Promise<void> => (ms <= 0 ? Promise.resolve() : new Promise((resolve) => setTimeout(resolve, ms)));
+const delay = (ms: number): Promise<void> => (ms <= 0 ? Promise.resolve() : new Promise((resolve) => window.setTimeout(resolve, ms)));
 
 /**
  * A GitReader over one fixture. `log` honours skip/count so paging is real; it ignores the ref

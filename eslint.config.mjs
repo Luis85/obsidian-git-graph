@@ -87,6 +87,19 @@ export default defineConfig([
 		},
 	},
 	{
+		// The harness never runs inside Obsidian, but the community-plugin scan reads every
+		// file in the repository and reports these two rules on it, so it follows them.
+		// obsidianmd/prefer-create-el needs type information, so this entry also points the
+		// parser at the project's tsconfig (harness/**/*.ts is included there already).
+		files: ['harness/**/*.ts'],
+		plugins: { obsidianmd },
+		languageOptions: { parser: tsparser, parserOptions: typeAwareParserOptions },
+		rules: {
+			'obsidianmd/prefer-window-timers': 'error',
+			'obsidianmd/prefer-create-el': 'error',
+		},
+	},
+	{
 		files: ['*.ts', '*.mjs', 'scripts/**/*.mjs'],
 		extends: [tseslint.configs.recommended],
 		languageOptions: { parser: tsparser },
