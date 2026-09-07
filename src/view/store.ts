@@ -1,5 +1,5 @@
 import { computed, shallowReactive, type ComputedRef } from 'vue';
-import type { Commit, CommitDetails, GitReader, Ref, RefsSnapshot } from '../git/types';
+import type { Commit, CommitDetails, GitReader, Ref, RefFilter, RefsSnapshot } from '../git/types';
 import { layoutGraph } from '../graph/layout';
 import type { Row } from '../graph/types';
 import type { GitGraphSettings } from '../settings/types';
@@ -26,6 +26,7 @@ export interface GraphState extends StatusState {
 	expandedDetails: CommitDetails | null;
 	detailsError: string | null;
 	filterText: string;
+	historyPath: string | null;
 }
 
 export interface GraphStore {
@@ -38,6 +39,7 @@ export interface GraphStore {
 	toggleExpand(hash: string): Promise<void>;
 	toggleDirty(): Promise<void>;
 	setFilter(text: string): void;
+	setHistoryPath(path: string | null): void;
 	dispose(): void;
 }
 
@@ -69,6 +71,23 @@ function createExpandToggler(deps: GraphStoreDeps, state: GraphState, isDisposed
 			if (isDisposed() || state.expandedHash !== hash) return;
 			state.detailsError = errorMessage(e);
 		}
+	};
+}
+
+/** Assembles `reader.log` options, including `path` only when a history path is set (never `path: undefined`). */
+function logOptions(state: GraphState, refFilter: RefFilter, skip: number, count: number): { skip: number; count: number; refs: RefFilter; path?: string } {
+	if (state.historyPath === null) return { skip, count, refs: refFilter };
+	return { skip, count, refs: refFilter, path: state.historyPath };
+}
+
+/** Builds `setHistoryPath`: switches the path filter, resets pagination to one page, collapses any expansion, and reloads. */
+function createHistoryPathSetter(state: GraphState, collapse: () => void, load: () => Promise<void>): (path: string | null) => void {
+	return function setHistoryPath(path: string | null): void {
+		if (state.historyPath === path) return;
+		state.historyPath = path;
+		state.loadedCount = 0;
+		collapse();
+		void load();
 	};
 }
 
@@ -108,6 +127,7 @@ export function createGraphStore(deps: GraphStoreDeps): GraphStore {
 		expandedDetails: null,
 		detailsError: null,
 		filterText: '',
+		historyPath: null,
 	});
 
 	const byHash = new Map<string, Commit>();
@@ -143,7 +163,7 @@ export function createGraphStore(deps: GraphStoreDeps): GraphStore {
 		const count = Math.max(pageSize, state.loadedCount);
 		state.loading = true;
 		try {
-			const [commits, refs, read] = await Promise.all([deps.reader.log({ skip: 0, count, refs: refFilter }), deps.reader.refs(), status.fetch()]);
+			const [commits, refs, read] = await Promise.all([deps.reader.log(logOptions(state, refFilter, 0, count)), deps.reader.refs(), status.fetch()]);
 			if (gen !== generation || disposed) return;
 			state.error = null;
 			applyLoad(state, byHash, { commits, refs, count }, collapse);
@@ -163,7 +183,7 @@ export function createGraphStore(deps: GraphStoreDeps): GraphStore {
 		const skip = state.loadedCount;
 		state.loadingMore = true;
 		try {
-			const page = await deps.reader.log({ skip, count: pageSize, refs: refFilter });
+			const page = await deps.reader.log(logOptions(state, refFilter, skip, pageSize));
 			if (gen !== generation || disposed) return;
 			for (const c of page) byHash.set(c.hash, c);
 			state.commits = [...state.commits, ...page];
@@ -180,6 +200,7 @@ export function createGraphStore(deps: GraphStoreDeps): GraphStore {
 	}
 
 	const toggleExpand = createExpandToggler(deps, state, () => disposed, collapse);
+	const setHistoryPath = createHistoryPathSetter(state, collapse, load);
 
 	return {
 		state,
@@ -193,6 +214,7 @@ export function createGraphStore(deps: GraphStoreDeps): GraphStore {
 		setFilter(text) {
 			state.filterText = text;
 		},
+		setHistoryPath,
 		dispose() {
 			disposed = true;
 			generation++;
