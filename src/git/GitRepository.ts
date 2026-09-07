@@ -75,9 +75,21 @@ export class GitRepository implements GitReader {
 		const selection = ['HEAD'];
 		const upstream = await this.tryRun(['rev-parse', '--symbolic-full-name', '@{upstream}']);
 		if (upstream !== null && upstream.trim().length > 0) selection.push(upstream.trim());
-		const defaultRemote = await this.tryRun(['symbolic-ref', '-q', 'refs/remotes/origin/HEAD']);
-		if (defaultRemote !== null && defaultRemote.trim().length > 0) selection.push(defaultRemote.trim());
+		const defaultRemote = await this.defaultRemoteRef();
+		if (defaultRemote !== null) selection.push(defaultRemote);
 		return [...new Set(selection)];
+	}
+
+	/**
+	 * The ref `origin/HEAD` points at, or null when there is none or it dangles: `symbolic-ref`
+	 * happily reports a target that no longer exists (a renamed or pruned default branch), and
+	 * handing that to `git log` fails the whole listing with "bad revision".
+	 */
+	private async defaultRemoteRef(): Promise<string | null> {
+		const target = (await this.tryRun(['symbolic-ref', '-q', 'refs/remotes/origin/HEAD']))?.trim() ?? '';
+		if (target.length === 0) return null;
+		const resolves = await this.tryRun(['rev-parse', '--verify', '-q', `${target}^{commit}`]);
+		return resolves === null ? null : target;
 	}
 
 	async refs(): Promise<RefsSnapshot> {

@@ -94,6 +94,21 @@ describe('log', () => {
 		expect(commits).toHaveLength(5);
 	});
 
+	it('refs=auto still lists HEAD history when origin/HEAD points at a pruned branch', async () => {
+		const tmp = createFixtureRepo();
+		try {
+			// A symbolic ref may point at a ref that no longer exists (the remote's default branch
+			// was renamed, or the tracking ref was pruned); git log must not be asked for it.
+			execFileSync('git', ['symbolic-ref', 'refs/remotes/origin/HEAD', 'refs/remotes/origin/gone'], { cwd: tmp.dir });
+			const dangling = new GitRepository({ gitPath: 'git', cwd: tmp.dir });
+			const commits = await dangling.log({ skip: 0, count: 200, refs: 'auto' });
+			expect(commits.map((c) => c.hash)).toContain(tmp.hashes.tip);
+			expect(commits).toHaveLength(5);
+		} finally {
+			tmp.dispose();
+		}
+	});
+
 	it('returns [] for a repository with no commits', async () => {
 		const empty = createEmptyRepo('git-graph-empty-');
 		try {
