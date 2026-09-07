@@ -20,6 +20,8 @@ function makeHost(repoState: RepoState = { kind: 'none' }): ViewHost {
 		settingsRef: shallowRef({ ...DEFAULT_SETTINGS }),
 		changes: createEmitter<void>(),
 		statusChanges: createEmitter<void>(),
+		activeFile: shallowRef<string | null>(null),
+		activeFileFallbacks: shallowRef<readonly string[]>([]),
 		viewOpened: vi.fn(),
 		viewClosed: vi.fn(),
 		openFile: vi.fn(),
@@ -71,6 +73,26 @@ describe('GitGraphView', () => {
 		await flushPromises();
 
 		expect(host.updateSettings).toHaveBeenCalledWith({ refFilter: 'all' });
+	});
+
+	it('passes the host active file to the graph and re-renders when it changes', async () => {
+		const reader = new FakeReader();
+		reader.commits = linear(1);
+		const host = makeHost({ kind: 'ready', root: 'C:/vault', reader });
+		host.activeFile.value = 'notes/a.md';
+		const view = new GitGraphView(makeLeaf(), host);
+
+		await view.onOpen();
+		await flushPromises();
+		view.contentEl.querySelector<HTMLElement>('.git-graph-history-toggle')?.click();
+		await flushPromises();
+		expect(reader.logCalls.at(-1)).toMatchObject({ path: 'notes/a.md' });
+
+		host.activeFileFallbacks.value = ['notes/b.md', 'notes/a.md'];
+		host.activeFile.value = 'notes/c.md';
+		await flushPromises();
+		expect(reader.logCalls.at(-1)).toMatchObject({ path: 'notes/c.md', fallbackPaths: ['notes/b.md', 'notes/a.md'] });
+		await view.onClose();
 	});
 
 	it('calls host.openFile when a file in the expanded commit is clicked', async () => {

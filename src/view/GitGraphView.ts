@@ -14,6 +14,17 @@ export interface ViewHost extends SettingsHost {
 	readonly settingsRef: ShallowRef<GitGraphSettings>;
 	readonly changes: Emitter<void>;
 	readonly statusChanges: Emitter<void>;
+	/**
+	 * Repository-relative path of Obsidian's active file. Null when no file has been opened yet,
+	 * when the repository is not ready, and when the file lies outside the repository root.
+	 */
+	readonly activeFile: ShallowRef<string | null>;
+	/**
+	 * Repository-relative paths `activeFile` had before Obsidian renamed it, newest first, while
+	 * those renames are still uncommitted — the paths git may know the file's history under.
+	 * Empty otherwise.
+	 */
+	readonly activeFileFallbacks: ShallowRef<readonly string[]>;
 	viewOpened(): void;
 	viewClosed(): void;
 	openFile(path: string): void;
@@ -52,6 +63,8 @@ export class GitGraphView extends ItemView {
 					settings: host.settingsRef.value,
 					changes: host.changes,
 					statusChanges: host.statusChanges,
+					activeFile: host.activeFile.value,
+					activeFileFallbacks: host.activeFileFallbacks.value,
 					onUpdateSettings: (patch: Partial<GitGraphSettings>) => void host.updateSettings(patch),
 					onOpenFile: (path: string) => host.openFile(path),
 				}),

@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, realpathSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -142,6 +142,210 @@ describe('log', () => {
 	});
 });
 
+describe('log with a path', () => {
+	it('follows a rename across history', async () => {
+		const commits = await repo.log({ skip: 0, count: 200, refs: 'all', path: 'renamed.md' });
+		expect(commits.map((c) => c.hash)).toEqual([fixture.hashes.tip, fixture.hashes.second, fixture.hashes.root]);
+	});
+
+	it('lists commits that touch a file added on a branch', async () => {
+		const commits = await repo.log({ skip: 0, count: 200, refs: 'all', path: 'feature.md' });
+		expect(commits.map((c) => c.hash)).toEqual([fixture.hashes.feature]);
+	});
+
+	it('returns [] for a path that never existed', async () => {
+		expect(await repo.log({ skip: 0, count: 200, refs: 'all', path: 'no-such.md' })).toEqual([]);
+	});
+
+	it('pages with skip and count for a path', async () => {
+		const page = await repo.log({ skip: 1, count: 1, refs: 'all', path: 'renamed.md' });
+		expect(page.map((c) => c.hash)).toEqual([fixture.hashes.second]);
+	});
+
+	// Obsidian renames the open note before git knows anything about the new name: until the
+	// rename is committed no commit contains it, so `--follow` on the new path is empty. The
+	// fallbacks are the paths git still knows, and they only stand in while the new one has nothing.
+	it('falls back to the pre-rename path while the rename is uncommitted', async () => {
+		const tmp = createEmptyRepo('git-graph-rename-');
+		try {
+			writeFileSync(join(tmp.dir, 'a.md'), 'a\n');
+			tmp.git('add', '.');
+			tmp.git('commit', '-q', '-m', 'Add a.md');
+			const added = tmp.git('rev-parse', 'HEAD');
+			tmp.git('mv', 'a.md', 'b.md');
+			const renamed = new GitRepository({ gitPath: 'git', cwd: tmp.dir });
+			expect(await renamed.log({ skip: 0, count: 10, refs: 'all', path: 'b.md' })).toEqual([]);
+			const viaFallback = await renamed.log({ skip: 0, count: 10, refs: 'all', path: 'b.md', fallbackPaths: ['a.md'] });
+			expect(viaFallback.map((c) => c.hash)).toEqual([added]);
+			// Once git knows the new path, it wins: the fallbacks are never consulted.
+			tmp.git('commit', '-q', '-m', 'Rename a.md to b.md');
+			const moved = tmp.git('rev-parse', 'HEAD');
+			writeFileSync(join(tmp.dir, 'b.md'), 'a\nmore\n');
+			tmp.git('commit', '-q', '-am', 'Edit b.md');
+			const edited = tmp.git('rev-parse', 'HEAD');
+			const commits = await renamed.log({ skip: 0, count: 10, refs: 'all', path: 'b.md', fallbackPaths: ['a.md'] });
+			expect(commits.map((c) => c.hash)).toEqual([edited, moved, added]);
+		} finally {
+			tmp.dispose();
+		}
+	});
+
+	// A second rename after the first one was committed: git knows the file as `b.md`, so `a.md`
+	// is no longer the best guess — `--follow` from it stops at the rename and misses everything
+	// committed under `b.md`. The chain is therefore tried newest first, and the newest path with
+	// any history wins.
+	it('tries every earlier path of a renamed file, newest first', async () => {
+		const tmp = createEmptyRepo('git-graph-rename-chain-');
+		try {
+			writeFileSync(join(tmp.dir, 'a.md'), 'a\n');
+			tmp.git('add', '.');
+			tmp.git('commit', '-q', '-m', 'Add a.md');
+			const added = tmp.git('rev-parse', 'HEAD');
+			tmp.git('mv', 'a.md', 'b.md');
+			tmp.git('commit', '-q', '-m', 'Rename a.md to b.md');
+			const moved = tmp.git('rev-parse', 'HEAD');
+			writeFileSync(join(tmp.dir, 'b.md'), 'a\nmore\n');
+			tmp.git('commit', '-q', '-am', 'Edit b.md');
+			const edited = tmp.git('rev-parse', 'HEAD');
+			// The second rename is not committed, so no commit names c.md at all.
+			tmp.git('mv', 'b.md', 'c.md');
+			const chained = new GitRepository({ gitPath: 'git', cwd: tmp.dir });
+			const commits = await chained.log({ skip: 0, count: 10, refs: 'all', path: 'c.md', fallbackPaths: ['b.md', 'a.md'] });
+			expect(commits.map((c) => c.hash)).toEqual([edited, moved, added]);
+			// Why the order matters: the oldest path alone stops at the committed rename.
+			const oldestOnly = await chained.log({ skip: 0, count: 10, refs: 'all', path: 'c.md', fallbackPaths: ['a.md'] });
+			expect(oldestOnly.map((c) => c.hash)).not.toContain(edited);
+			expect(oldestOnly.length).toBeLessThan(commits.length);
+		} finally {
+			tmp.dispose();
+		}
+	});
+
+	// A rename onto a path an unrelated, since-deleted file once had: `--follow` on the new path
+	// is not empty, but what it finds is the other file's history. While the rename is uncommitted
+	// HEAD does not contain the new path, so the earlier paths are asked first.
+	it('prefers the rename source over a deleted stranger\'s history at the destination while the rename is uncommitted', async () => {
+		const tmp = createEmptyRepo('git-graph-reused-name-');
+		try {
+			writeFileSync(join(tmp.dir, 'b.md'), 'stranger\n');
+			tmp.git('add', '.');
+			tmp.git('commit', '-q', '-m', 'Add an unrelated b.md');
+			const stranger = tmp.git('rev-parse', 'HEAD');
+			tmp.git('rm', '-q', 'b.md');
+			tmp.git('commit', '-q', '-m', 'Delete the unrelated b.md');
+			const strangerGone = tmp.git('rev-parse', 'HEAD');
+			writeFileSync(join(tmp.dir, 'a.md'), 'a\n');
+			tmp.git('add', '.');
+			tmp.git('commit', '-q', '-m', 'Add a.md');
+			const added = tmp.git('rev-parse', 'HEAD');
+			tmp.git('mv', 'a.md', 'b.md');
+			const reused = new GitRepository({ gitPath: 'git', cwd: tmp.dir });
+			const pending = await reused.log({ skip: 0, count: 10, refs: 'all', path: 'b.md', fallbackPaths: ['a.md'] });
+			expect(pending.map((c) => c.hash)).toEqual([added]);
+			// Without a known earlier path there is nothing better to offer than what git has for b.md.
+			const unaware = await reused.log({ skip: 0, count: 10, refs: 'all', path: 'b.md' });
+			expect(unaware.map((c) => c.hash)).toEqual([strangerGone, stranger]);
+			// Once the rename is committed, HEAD contains b.md and its own history is the answer.
+			tmp.git('commit', '-q', '-m', 'Rename a.md to b.md');
+			const moved = tmp.git('rev-parse', 'HEAD');
+			const settled = await reused.log({ skip: 0, count: 10, refs: 'all', path: 'b.md', fallbackPaths: ['a.md'] });
+			expect(settled.map((c) => c.hash)).toEqual([moved, added]);
+		} finally {
+			tmp.dispose();
+		}
+	});
+
+	// The stranger may still be in HEAD: deleted only in the working tree, with the open note
+	// renamed onto its name in the same uncommitted sweep. Git cannot see a rename there at all
+	// (b.md merely changed content), so the earlier path Obsidian reported is the only evidence —
+	// and while HEAD still contains that earlier path, it is the note's committed identity.
+	it('prefers the rename source when the destination name is still tracked in HEAD', async () => {
+		const tmp = createEmptyRepo('git-graph-tracked-name-');
+		try {
+			writeFileSync(join(tmp.dir, 'b.md'), 'stranger\n');
+			writeFileSync(join(tmp.dir, 'a.md'), 'a\n');
+			tmp.git('add', '.');
+			tmp.git('commit', '-q', '-m', 'Add a.md and an unrelated b.md');
+			const both = tmp.git('rev-parse', 'HEAD');
+			writeFileSync(join(tmp.dir, 'a.md'), 'a\nmore\n');
+			tmp.git('commit', '-q', '-am', 'Edit a.md');
+			const edited = tmp.git('rev-parse', 'HEAD');
+			// Obsidian's rename is a plain filesystem rename; no git command is involved.
+			rmSync(join(tmp.dir, 'b.md'));
+			renameSync(join(tmp.dir, 'a.md'), join(tmp.dir, 'b.md'));
+			const repoAfter = new GitRepository({ gitPath: 'git', cwd: tmp.dir });
+			const pending = await repoAfter.log({ skip: 0, count: 10, refs: 'all', path: 'b.md', fallbackPaths: ['a.md'] });
+			expect(pending.map((c) => c.hash)).toEqual([edited, both]);
+		} finally {
+			tmp.dispose();
+		}
+	});
+
+	// The opposite trap: the rename a → b is committed, the note stays open (so `a.md` is still
+	// remembered as an earlier path), and later an unrelated file is committed at `a.md`. Now
+	// `a.md` is in HEAD again — but it is also present in the working tree, which an earlier path
+	// of an uncommitted rename never is. Only a path HEAD has and the working tree lacks counts.
+	it('ignores an earlier path that a new, unrelated file has taken over', async () => {
+		const tmp = createEmptyRepo('git-graph-reused-source-');
+		try {
+			writeFileSync(join(tmp.dir, 'a.md'), 'a\n');
+			tmp.git('add', '.');
+			tmp.git('commit', '-q', '-m', 'Add a.md');
+			const added = tmp.git('rev-parse', 'HEAD');
+			tmp.git('mv', 'a.md', 'b.md');
+			tmp.git('commit', '-q', '-m', 'Rename a.md to b.md');
+			const moved = tmp.git('rev-parse', 'HEAD');
+			writeFileSync(join(tmp.dir, 'a.md'), 'someone else\n');
+			tmp.git('add', '.');
+			tmp.git('commit', '-q', '-m', 'Add an unrelated a.md');
+			const stranger = tmp.git('rev-parse', 'HEAD');
+			const reused = new GitRepository({ gitPath: 'git', cwd: tmp.dir });
+			const commits = await reused.log({ skip: 0, count: 10, refs: 'all', path: 'b.md', fallbackPaths: ['a.md'] });
+			expect(commits.map((c) => c.hash)).toEqual([moved, added]);
+			expect(commits.map((c) => c.hash)).not.toContain(stranger);
+		} finally {
+			tmp.dispose();
+		}
+	});
+
+	it('omitting path still yields the full history', async () => {
+		const commits = await repo.log({ skip: 0, count: 200, refs: 'all' });
+		expect(commits).toHaveLength(5);
+	});
+
+	// The path is repository-relative, but git resolves a bare pathspec against cwd. For a vault
+	// nested inside a larger repository the two differ, so the pathspec has to be anchored to the
+	// repository root or the history comes back empty.
+	it('resolves the path against the repository root, not cwd, when cwd is a subdirectory', async () => {
+		const sub = join(fixture.dir, 'sub');
+		mkdirSync(sub, { recursive: true });
+		const subRepo = new GitRepository({ gitPath: 'git', cwd: sub });
+		const commits = await subRepo.log({ skip: 0, count: 200, refs: 'all', path: 'renamed.md' });
+		expect(commits.map((c) => c.hash)).toEqual([fixture.hashes.tip, fixture.hashes.second, fixture.hashes.root]);
+	});
+
+	// A note named `Meeting [2026].md` is a character class unless the pathspec says `literal`:
+	// `[2026]` also matches the `2` of the sibling below, so its commits leak into the history.
+	it('treats glob metacharacters in the path literally', async () => {
+		const tmp = createEmptyRepo('git-graph-glob-');
+		try {
+			mkdirSync(join(tmp.dir, 'notes'));
+			writeFileSync(join(tmp.dir, 'notes', 'Meeting [2026].md'), 'meeting\n');
+			writeFileSync(join(tmp.dir, 'notes', 'Meeting 2.md'), 'sibling\n');
+			tmp.git('add', '.');
+			tmp.git('commit', '-q', '-m', 'Add both notes');
+			const both = tmp.git('rev-parse', 'HEAD');
+			writeFileSync(join(tmp.dir, 'notes', 'Meeting 2.md'), 'sibling edited\n');
+			tmp.git('commit', '-q', '-am', 'Edit only the sibling');
+			const bracketed = new GitRepository({ gitPath: 'git', cwd: tmp.dir });
+			const commits = await bracketed.log({ skip: 0, count: 200, refs: 'all', path: 'notes/Meeting [2026].md' });
+			expect(commits.map((c) => c.hash)).toEqual([both]);
+		} finally {
+			tmp.dispose();
+		}
+	});
+});
+
 describe('refs', () => {
 	it('reports branches, the remote, the dereferenced tag and HEAD', async () => {
 		const snapshot = await repo.refs();
@@ -232,5 +436,27 @@ describe('commitDetails', () => {
 	it('lists a root commit', async () => {
 		const details = await repo.commitDetails(fixture.hashes.root);
 		expect(details.files).toEqual([{ path: 'note.md', status: 'A' }]);
+	});
+});
+
+// What the plugin asks to decide whether an earlier path of the open note is still worth
+// remembering: once a rename is committed the source has left HEAD and `--follow` reaches it
+// from the current name on its own.
+describe('inHead', () => {
+	it('reports whether HEAD contains a repository-relative path', async () => {
+		expect(await repo.inHead('renamed.md')).toBe(true);
+		// The tip commit renamed note.md away, so HEAD no longer has it.
+		expect(await repo.inHead('note.md')).toBe(false);
+		expect(await repo.inHead('never-existed.md')).toBe(false);
+	});
+
+	it('is false for every path in a repository with no commits', async () => {
+		const empty = createEmptyRepo('git-graph-in-head-');
+		try {
+			const emptyRepo = new GitRepository({ gitPath: 'git', cwd: empty.dir });
+			expect(await emptyRepo.inHead('note.md')).toBe(false);
+		} finally {
+			empty.dispose();
+		}
 	});
 });

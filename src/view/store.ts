@@ -1,5 +1,5 @@
 import { computed, shallowReactive, type ComputedRef } from 'vue';
-import type { Commit, CommitDetails, GitReader, Ref, RefsSnapshot } from '../git/types';
+import type { Commit, CommitDetails, GitReader, Ref, RefFilter, RefsSnapshot } from '../git/types';
 import { layoutGraph } from '../graph/layout';
 import type { Row } from '../graph/types';
 import type { GitGraphSettings } from '../settings/types';
@@ -26,6 +26,8 @@ export interface GraphState extends StatusState {
 	expandedDetails: CommitDetails | null;
 	detailsError: string | null;
 	filterText: string;
+	historyPath: string | null;
+	historyFallbackPaths: readonly string[];
 }
 
 export interface GraphStore {
@@ -38,6 +40,7 @@ export interface GraphStore {
 	toggleExpand(hash: string): Promise<void>;
 	toggleDirty(): Promise<void>;
 	setFilter(text: string): void;
+	setHistoryPath(path: string | null, fallbackPaths?: readonly string[]): void;
 	dispose(): void;
 }
 
@@ -70,6 +73,50 @@ function createExpandToggler(deps: GraphStoreDeps, state: GraphState, isDisposed
 			state.detailsError = errorMessage(e);
 		}
 	};
+}
+
+/** Assembles `reader.log` options, including `path`/`fallbackPaths` only when set (never `path: undefined`). */
+function logOptions(state: GraphState, refFilter: RefFilter, skip: number, count: number): { skip: number; count: number; refs: RefFilter; path?: string; fallbackPaths?: readonly string[] } {
+	if (state.historyPath === null) return { skip, count, refs: refFilter };
+	if (state.historyFallbackPaths.length === 0) return { skip, count, refs: refFilter, path: state.historyPath };
+	return { skip, count, refs: refFilter, path: state.historyPath, fallbackPaths: [...state.historyFallbackPaths] };
+}
+
+/** True when both lists hold the same paths in the same order. */
+function samePaths(a: readonly string[], b: readonly string[]): boolean {
+	return a.length === b.length && a.every((path, i) => path === b[i]);
+}
+
+/**
+ * Builds `setHistoryPath`: switches the path filter, drops the rows of the old scope, resets
+ * pagination to one page, collapses any expansion, and reloads. `fallbackPaths` are the earlier
+ * paths git may still know while a rename of `path` is uncommitted; changing only them is still
+ * a scope change, so they take part in the same-value check — element-wise, since the caller
+ * hands down a fresh array whenever anything about the active file moves.
+ */
+function createHistoryPathSetter(state: GraphState, byHash: Map<string, Commit>, collapse: () => void, load: () => Promise<void>): (path: string | null, fallbackPaths?: readonly string[]) => void {
+	return function setHistoryPath(path: string | null, fallbackPaths: readonly string[] = []): void {
+		if (state.historyPath === path && samePaths(state.historyFallbackPaths, fallbackPaths)) return;
+		state.historyPath = path;
+		state.historyFallbackPaths = [...fallbackPaths];
+		state.loadedCount = 0;
+		// The loaded commits belong to the previous scope. Clearing them here (rather than
+		// waiting for the new log) keeps another file's history from showing under this file's
+		// name — and, when the request fails, from sitting under the error banner indefinitely.
+		byHash.clear();
+		state.commits = [];
+		state.rows = [];
+		state.hasMore = false;
+		collapse();
+		void load();
+	};
+}
+
+/** Collapses the expanded commit, if any, and forgets its details. */
+function collapseExpansion(state: GraphState): void {
+	state.expandedHash = null;
+	state.expandedDetails = null;
+	state.detailsError = null;
 }
 
 /** Applies a completed `load()`: rows/refs/head are replaced wholesale. Status is applied separately, by `statusSync`. */
@@ -108,6 +155,8 @@ export function createGraphStore(deps: GraphStoreDeps): GraphStore {
 		expandedDetails: null,
 		detailsError: null,
 		filterText: '',
+		historyPath: null,
+		historyFallbackPaths: [],
 	});
 
 	const byHash = new Map<string, Commit>();
@@ -131,19 +180,20 @@ export function createGraphStore(deps: GraphStoreDeps): GraphStore {
 		});
 	});
 
-	const collapse = (): void => {
-		state.expandedHash = null;
-		state.expandedDetails = null;
-		state.detailsError = null;
-	};
+	const collapse = (): void => collapseExpansion(state);
 
 	async function load(): Promise<void> {
 		const gen = ++generation;
+		// Bumping the generation supersedes any in-flight `loadMore`, so its flag is released here,
+		// whether this load succeeds or fails. Otherwise the list's one automatic request for the
+		// next page (a first page short enough to be fully visible) would be rejected as a duplicate
+		// and nothing would re-issue it. `loading` keeps a new `loadMore` out until this settles.
+		state.loadingMore = false;
 		const { refFilter, pageSize } = deps.settings();
 		const count = Math.max(pageSize, state.loadedCount);
 		state.loading = true;
 		try {
-			const [commits, refs, read] = await Promise.all([deps.reader.log({ skip: 0, count, refs: refFilter }), deps.reader.refs(), status.fetch()]);
+			const [commits, refs, read] = await Promise.all([deps.reader.log(logOptions(state, refFilter, 0, count)), deps.reader.refs(), status.fetch()]);
 			if (gen !== generation || disposed) return;
 			state.error = null;
 			applyLoad(state, byHash, { commits, refs, count }, collapse);
@@ -163,7 +213,7 @@ export function createGraphStore(deps: GraphStoreDeps): GraphStore {
 		const skip = state.loadedCount;
 		state.loadingMore = true;
 		try {
-			const page = await deps.reader.log({ skip, count: pageSize, refs: refFilter });
+			const page = await deps.reader.log(logOptions(state, refFilter, skip, pageSize));
 			if (gen !== generation || disposed) return;
 			for (const c of page) byHash.set(c.hash, c);
 			state.commits = [...state.commits, ...page];
@@ -175,11 +225,14 @@ export function createGraphStore(deps: GraphStoreDeps): GraphStore {
 			if (gen !== generation || disposed) return;
 			state.error = errorMessage(e);
 		} finally {
-			state.loadingMore = false;
+			// A newer request owns the flag once this one is superseded; clearing it here would
+			// release a page load that is still in flight.
+			if (gen === generation) state.loadingMore = false;
 		}
 	}
 
 	const toggleExpand = createExpandToggler(deps, state, () => disposed, collapse);
+	const setHistoryPath = createHistoryPathSetter(state, byHash, collapse, load);
 
 	return {
 		state,
@@ -193,6 +246,7 @@ export function createGraphStore(deps: GraphStoreDeps): GraphStore {
 		setFilter(text) {
 			state.filterText = text;
 		},
+		setHistoryPath,
 		dispose() {
 			disposed = true;
 			generation++;

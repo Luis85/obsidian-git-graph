@@ -19,13 +19,22 @@
 	text-overflow: ellipsis;
 	white-space: nowrap;
 }
-.git-graph-branch {
+.git-graph-branch,
+.git-graph-history-file {
 	color: var(--text-muted);
 	font-weight: var(--font-normal);
 }
-.git-graph-branch::before {
+.git-graph-branch::before,
+.git-graph-history-file::before {
 	content: '·';
 	margin-right: var(--size-4-1);
+}
+/* Only the file label truncates: a path is long, a branch name is the header's own subject. */
+.git-graph-history-file {
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
 }
 .git-graph-tools {
 	display: flex;
@@ -40,4 +49,7 @@
 	flex: 1 1 auto;
 	min-width: 0;
 	font-size: var(--font-ui-smaller);
+}
+.git-graph-history-toggle.is-active {
+	color: var(--text-accent);
 }

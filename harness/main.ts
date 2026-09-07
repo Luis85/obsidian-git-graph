@@ -19,6 +19,7 @@ interface HarnessApi {
 	emitChange(): void;
 	emitStatusChange(): void;
 	setFilter(text: string): void;
+	setActiveFile(path: string | null): void;
 }
 
 declare global {
@@ -57,6 +58,8 @@ function buildRepoState(): RepoState {
 }
 
 const settings = shallowRef(buildSettings());
+// `||` not `??`: `?file=` is an empty label, not an open file — it must not turn history mode on.
+const activeFile = shallowRef<string | null>(params.get('file') || null);
 const changes = createEmitter<void>();
 const statusChanges = createEmitter<void>();
 const repoState = buildRepoState();
@@ -100,6 +103,7 @@ createApp({
 			settings: settings.value,
 			changes,
 			statusChanges,
+			activeFile: activeFile.value,
 			onUpdateSettings: (patch: Partial<GitGraphSettings>) => {
 				settings.value = { ...settings.value, ...patch };
 			},
@@ -179,6 +183,14 @@ async function expandRow(needle: string): Promise<void> {
 	await waitFor(() => document.querySelector('.git-graph-details') !== null, 'the commit details panel');
 }
 
+/** `file=` clicks the history toggle; the header only shows `.git-graph-history-file` once history mode is on and `activeFile` is set, so that element is the signal to wait for. */
+async function activateHistory(): Promise<void> {
+	const toggle = document.querySelector<HTMLButtonElement>('.git-graph-history-toggle');
+	if (toggle === null) throw new Error('file= is set but no .git-graph-history-toggle is rendered');
+	toggle.click();
+	await waitFor(() => document.querySelector('.git-graph-history-file') !== null, 'the active file to show in the header');
+}
+
 async function becomeReady(): Promise<void> {
 	await waitFor(firstLoadSettled, 'the first load to settle');
 	if (scenario.refreshAfterLoad === true) {
@@ -189,7 +201,8 @@ async function becomeReady(): Promise<void> {
 	if (filter !== null) setFilter(filter);
 	const expand = params.get('expand');
 	if (expand !== null) await expandRow(expand);
-	// Two frames so Vue has flushed the filter/expand updates before a screenshot is taken.
+	if (activeFile.value !== null) await activateHistory();
+	// Two frames so Vue has flushed the filter/expand/history updates before a screenshot is taken.
 	await nextFrame();
 	await nextFrame();
 }
@@ -207,4 +220,7 @@ window.__harness = {
 	emitChange: () => changes.emit(),
 	emitStatusChange: () => statusChanges.emit(),
 	setFilter,
+	setActiveFile: (path: string | null) => {
+		activeFile.value = path;
+	},
 };

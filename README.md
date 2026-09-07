@@ -42,7 +42,13 @@ Open the pane from the ribbon icon, or from the command palette: **Git Graph: Op
 own when the repository's git state changes (commits, branches, checkouts). Working-tree
 edits (unstaged/staged file changes) refresh the changes row within about half a second
 while the pane is open; a git-state change still refreshes the whole graph. When the vault
-is a folder inside a larger repository, the row counts only files under the vault.
+is a folder inside a larger repository, the row counts only files under the vault. The
+history icon in the pane header narrows the list to just the commits that touched the file
+open in the active editor, as a flat list with the graph lanes hidden; switching the active
+file re-filters it, and clicking the icon again returns to the full graph. Renames are
+followed, including one made in Obsidian and not yet committed. File history obeys
+the **Refs to show** setting like the rest of the pane, so on Auto a commit that touched the
+file on an unmerged branch is not listed until you switch to All.
 
 ## Settings
 

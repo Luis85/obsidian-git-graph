@@ -20,6 +20,9 @@ See [RELEASING.md](RELEASING.md) for how this file is kept in step with a releas
 
 ## [Unreleased]
 
+### Added
+- A "Show history of the active file" toggle in the pane header lists only the commits that touched the file open in the editor (renames followed), as a flat list; switching files re-filters, and turning it off restores the graph.
+
 ## [0.2.1] - 2026-09-07
 
 ### Changed

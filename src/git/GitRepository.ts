@@ -52,10 +52,89 @@ export class GitRepository implements GitReader {
 		return resolve(this.cwd, out);
 	}
 
-	async log(opts: { skip: number; count: number; refs: RefFilter }): Promise<Commit[]> {
+	async log(opts: { skip: number; count: number; refs: RefFilter; path?: string; fallbackPaths?: readonly string[] }): Promise<Commit[]> {
 		const selection = await this.refSelection(opts.refs);
 		if (selection === null) return [];
-		const out = await this.run(['log', '--topo-order', '-z', `--format=${LOG_FORMAT}`, `--skip=${opts.skip}`, `--max-count=${opts.count}`, ...selection, '--']);
+		if (opts.path === undefined) {
+			const out = await this.run(['log', '--topo-order', '-z', `--format=${LOG_FORMAT}`, `--skip=${opts.skip}`, `--max-count=${opts.count}`, ...selection, '--']);
+			return parseLog(out);
+		}
+		return this.logFollowing(selection, opts.skip, opts.count, opts.path, opts.fallbackPaths ?? []);
+	}
+
+	/**
+	 * `git log --follow` does not compose with `--skip`: with both set, git silently returns no
+	 * commits at all — in every option order, with or without --topo-order (verified against git
+	 * 2.48.1). So a path query is bounded with `--max-count=skip+count` only, and the skip is
+	 * applied to the parsed result instead of to git.
+	 *
+	 * `path` is repository-relative but `cwd` is the vault, which for a vault nested inside a
+	 * larger repository is not the repository root — a bare pathspec, resolved against cwd, would
+	 * then name a file that does not exist and the history would always be empty. `:(top,…)`
+	 * (pathspec magic, git >= 1.9) anchors it to the root instead, and `literal` disables glob
+	 * interpretation so a note like `Meeting [2026].md` is not read as a character class.
+	 *
+	 * `fallbackPaths` covers the window in which Obsidian has already renamed the open note but
+	 * the rename is not committed: no commit names the new path yet, so `--follow` on it is
+	 * empty and only an earlier path is one git knows. They are tried newest first, because a
+	 * rename committed earlier in the chain makes the newer path the one whose history is
+	 * complete — `--follow` from an older path stops at that committed rename and misses
+	 * everything recorded under the newer one. The choice is made on the unsliced result, so it
+	 * does not depend on which page is being fetched — a path with any history at all wins, even
+	 * when this page of it happens to be past its last commit.
+	 *
+	 * Which name is the note's committed identity cannot be read off `path` alone: history found
+	 * under it may belong to a since-deleted stranger that had the same name, whether that
+	 * stranger is gone from HEAD or only from the working tree (in which case git sees no rename
+	 * at all, just a changed `b.md`). The earlier paths are the evidence — but only while they
+	 * look like the source of an uncommitted rename: still in HEAD, gone from the working tree.
+	 * The newest such path is where the note's commits live, so it is asked first. Once a rename
+	 * is committed its source has left HEAD, and `path` is asked first again; an earlier name a
+	 * new, unrelated file has since taken over is present in the working tree and so never counts.
+	 *
+	 * The test cannot tell a real uncommitted rename from an earlier path a stranger has since
+	 * re-added and deleted, which looks exactly the same. Retiring is therefore the plugin's job:
+	 * it drops an earlier path as soon as that path leaves HEAD, on every commit it sees, so a
+	 * stale one only reaches here in the window between a commit and the next `changes` event.
+	 */
+	private async logFollowing(selection: string[], skip: number, count: number, path: string, fallbackPaths: readonly string[]): Promise<Commit[]> {
+		const identity = await this.newestRenamedAway(fallbackPaths);
+		const ordered = identity === null ? [path, ...fallbackPaths] : [identity, path, ...fallbackPaths.filter((p) => p !== identity)];
+		for (const candidate of ordered) {
+			// Sequential on purpose: each path is only queried because the previous one was empty.
+			const commits = await this.runFollow(selection, skip + count, candidate);
+			if (commits.length > 0) return commits.slice(skip);
+		}
+		return [];
+	}
+
+	/**
+	 * True when HEAD's tree contains `path`. `<rev>:<path>` is resolved from the repository root
+	 * (only a `./` or `../` prefix would make it relative to cwd) and is never glob-expanded, so
+	 * no pathspec magic is needed here; `cat-file -e` exits non-zero for a path HEAD lacks and
+	 * for a repository whose HEAD does not resolve at all.
+	 */
+	async inHead(path: string): Promise<boolean> {
+		return (await this.tryRun(['cat-file', '-e', `HEAD:${path}`])) !== null;
+	}
+
+	/**
+	 * The first of `paths` that HEAD contains but the working tree no longer has — what the
+	 * source of an uncommitted rename looks like, staged or not — or null. `git diff HEAD`
+	 * compares the working tree with HEAD; restricted to one path, a rename cannot pair up with
+	 * its destination, so the source shows as a plain deletion.
+	 */
+	private async newestRenamedAway(paths: readonly string[]): Promise<string | null> {
+		for (const path of paths) {
+			// Sequential on purpose: the newest path is the answer, later ones are only asked if it is absent.
+			const deleted = await this.tryRun(['diff', '--name-only', '--diff-filter=D', 'HEAD', '--', `:(top,literal)${path}`]);
+			if (deleted !== null && deleted.trim().length > 0) return path;
+		}
+		return null;
+	}
+
+	private async runFollow(selection: string[], max: number, path: string): Promise<Commit[]> {
+		const out = await this.run(['log', '--topo-order', '-z', `--format=${LOG_FORMAT}`, `--max-count=${max}`, ...selection, '--follow', '--', `:(top,literal)${path}`]);
 		return parseLog(out);
 	}
 
