@@ -16,6 +16,24 @@ Deleted files are shown struck through and cannot be opened.
 - `git` installed. If it is not on your PATH, set the executable in the plugin settings.
 - git 2.13 or newer (`--absolute-git-dir` is used to resolve the repository's `.git` directory).
 
+## What the plugin touches
+
+Obsidian's community-plugin review flags any plugin that uses Node's `fs` module or runs
+external programs. This one does both, for exactly these purposes, and nothing else:
+
+- **Runs the `git` executable** (the one from the *Git executable* setting) with
+  `child_process.execFile` — never through a shell — to read the repository: `rev-parse`,
+  `log`, `for-each-ref`, `status`, `show`, `diff-tree`, `symbolic-ref`. No command writes to
+  the repository or the working tree; the plugin has no commit, checkout, fetch or push.
+- **Reads the repository's `.git` directory** with `fs.watch` so the pane refreshes when a
+  commit, branch or checkout happens. For a vault that is a folder inside a larger
+  repository, that directory sits outside the vault. The plugin never writes there.
+- **Resolves real paths** (`fs.realpathSync`) of the vault folder and the repository root so
+  a vault opened through a symlink or junction matches the paths git reports.
+
+Files are opened in the editor through Obsidian's vault API only. The plugin makes no
+network requests and collects no telemetry.
+
 ## Usage
 
 Open the pane from the ribbon icon, or from the command palette: **Git Graph: Open**.

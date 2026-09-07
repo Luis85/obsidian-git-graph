@@ -28,6 +28,9 @@ See [RELEASING.md](RELEASING.md) for how this file is kept in step with a releas
 - A repository with uncommitted files but no commits yet shows the changes row instead of only "No commits yet".
 - When a page of commits ends on a merge whose parents are all on the next page, each parent now gets its own line off the bottom of the graph instead of all of them overlapping in one.
 
+### Changed
+- The README now spells out which git commands the plugin runs and which files outside the vault it reads, for the community-plugin review.
+
 ## [0.2.0] - 2026-09-07
 
 ### Changed
