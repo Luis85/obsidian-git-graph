@@ -142,6 +142,32 @@ describe('log', () => {
 	});
 });
 
+describe('log with a path', () => {
+	it('follows a rename across history', async () => {
+		const commits = await repo.log({ skip: 0, count: 200, refs: 'all', path: 'renamed.md' });
+		expect(commits.map((c) => c.hash)).toEqual([fixture.hashes.tip, fixture.hashes.second, fixture.hashes.root]);
+	});
+
+	it('lists commits that touch a file added on a branch', async () => {
+		const commits = await repo.log({ skip: 0, count: 200, refs: 'all', path: 'feature.md' });
+		expect(commits.map((c) => c.hash)).toEqual([fixture.hashes.feature]);
+	});
+
+	it('returns [] for a path that never existed', async () => {
+		expect(await repo.log({ skip: 0, count: 200, refs: 'all', path: 'no-such.md' })).toEqual([]);
+	});
+
+	it('pages with skip and count for a path', async () => {
+		const page = await repo.log({ skip: 1, count: 1, refs: 'all', path: 'renamed.md' });
+		expect(page.map((c) => c.hash)).toEqual([fixture.hashes.second]);
+	});
+
+	it('omitting path still yields the full history', async () => {
+		const commits = await repo.log({ skip: 0, count: 200, refs: 'all' });
+		expect(commits).toHaveLength(5);
+	});
+});
+
 describe('refs', () => {
 	it('reports branches, the remote, the dereferenced tag and HEAD', async () => {
 		const snapshot = await repo.refs();

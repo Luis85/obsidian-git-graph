@@ -52,11 +52,25 @@ export class GitRepository implements GitReader {
 		return resolve(this.cwd, out);
 	}
 
-	async log(opts: { skip: number; count: number; refs: RefFilter }): Promise<Commit[]> {
+	async log(opts: { skip: number; count: number; refs: RefFilter; path?: string }): Promise<Commit[]> {
 		const selection = await this.refSelection(opts.refs);
 		if (selection === null) return [];
-		const out = await this.run(['log', '--topo-order', '-z', `--format=${LOG_FORMAT}`, `--skip=${opts.skip}`, `--max-count=${opts.count}`, ...selection, '--']);
-		return parseLog(out);
+		if (opts.path === undefined) {
+			const out = await this.run(['log', '--topo-order', '-z', `--format=${LOG_FORMAT}`, `--skip=${opts.skip}`, `--max-count=${opts.count}`, ...selection, '--']);
+			return parseLog(out);
+		}
+		return this.logFollowing(selection, opts.skip, opts.count, opts.path);
+	}
+
+	/**
+	 * `git log --follow` does not compose with `--skip`: with both set, git silently returns no
+	 * commits at all — in every option order, with or without --topo-order (verified against git
+	 * 2.48.1). So a path query is bounded with `--max-count=skip+count` only, and the skip is
+	 * applied to the parsed result instead of to git.
+	 */
+	private async logFollowing(selection: string[], skip: number, count: number, path: string): Promise<Commit[]> {
+		const out = await this.run(['log', '--topo-order', '-z', `--format=${LOG_FORMAT}`, `--max-count=${skip + count}`, ...selection, '--follow', '--', path]);
+		return parseLog(out).slice(skip);
 	}
 
 	/**

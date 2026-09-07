@@ -16,7 +16,7 @@ export class FakeReader implements GitReader {
 	commits: Commit[] = [];
 	refsSnapshot: RefsSnapshot = { refs: [], headHash: null, headBranch: null };
 	changed = 0;
-	logCalls: { skip: number; count: number; refs: RefFilter }[] = [];
+	logCalls: { skip: number; count: number; refs: RefFilter; path?: string }[] = [];
 	statusCalls = 0;
 	statusFilesCalls = 0;
 	failLog: Error | null = null;
@@ -31,7 +31,7 @@ export class FakeReader implements GitReader {
 	deferStatusFiles = false;
 	pendingStatusFiles: ((files: ChangedFile[]) => void)[] = [];
 
-	log(opts: { skip: number; count: number; refs: RefFilter }): Promise<Commit[]> {
+	log(opts: { skip: number; count: number; refs: RefFilter; path?: string }): Promise<Commit[]> {
 		this.logCalls.push(opts);
 		if (this.failLog) return Promise.reject(this.failLog);
 		if (this.deferLog) return new Promise((resolve) => this.pendingLogs.push(resolve));
