@@ -20,6 +20,8 @@ See [RELEASING.md](RELEASING.md) for how this file is kept in step with a releas
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-09-07
+
 ### Changed
 - For a vault that is a folder inside a larger repository, the changes row now counts and lists only files under the vault, so it no longer goes stale on edits the pane cannot see.
 
