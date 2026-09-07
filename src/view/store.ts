@@ -106,16 +106,16 @@ function createHistoryPathSetter(state: GraphState, byHash: Map<string, Commit>,
 	};
 }
 
-/**
- * Applies a completed `load()`: rows/refs/head are replaced wholesale. Status is applied
- * separately, by `statusSync`. A `loadMore` this load superseded no longer owns anything here,
- * so its flag is cleared with the same assignment that publishes the new page — before the list
- * can react to it. Otherwise the list's one automatic request for the next page (a first page
- * short enough to be fully visible) is rejected as a duplicate, and nothing re-issues it.
- */
+/** Collapses the expanded commit, if any, and forgets its details. */
+function collapseExpansion(state: GraphState): void {
+	state.expandedHash = null;
+	state.expandedDetails = null;
+	state.detailsError = null;
+}
+
+/** Applies a completed `load()`: rows/refs/head are replaced wholesale. Status is applied separately, by `statusSync`. */
 function applyLoad(state: GraphState, byHash: Map<string, Commit>, result: { commits: Commit[]; refs: RefsSnapshot; count: number }, collapse: () => void): void {
 	const { commits, refs, count } = result;
-	state.loadingMore = false;
 	byHash.clear();
 	for (const c of commits) byHash.set(c.hash, c);
 	state.commits = commits;
@@ -174,14 +174,15 @@ export function createGraphStore(deps: GraphStoreDeps): GraphStore {
 		});
 	});
 
-	const collapse = (): void => {
-		state.expandedHash = null;
-		state.expandedDetails = null;
-		state.detailsError = null;
-	};
+	const collapse = (): void => collapseExpansion(state);
 
 	async function load(): Promise<void> {
 		const gen = ++generation;
+		// Bumping the generation supersedes any in-flight `loadMore`, so its flag is released here,
+		// whether this load succeeds or fails. Otherwise the list's one automatic request for the
+		// next page (a first page short enough to be fully visible) would be rejected as a duplicate
+		// and nothing would re-issue it. `loading` keeps a new `loadMore` out until this settles.
+		state.loadingMore = false;
 		const { refFilter, pageSize } = deps.settings();
 		const count = Math.max(pageSize, state.loadedCount);
 		state.loading = true;

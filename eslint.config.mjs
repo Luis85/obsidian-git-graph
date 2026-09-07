@@ -144,7 +144,7 @@ export default defineConfig([
 	{
 		files: ['src/view/store.ts'],
 		rules: {
-			// TODO(quality): createGraphStore has 108 lines (limit 80). Every status read now
+			// TODO(quality): createGraphStore has 106 lines (limit 80). Every status read now
 			// lives in ./statusSync (createStatusSync) and `errorMessage` in ./errors, and
 			// `toggleExpand` (createExpandToggler), `applyLoad` and `groupRefs` sit at module scope.
 			// What remains inline is the initial `state` literal (one line per GraphState field)
@@ -154,7 +154,7 @@ export default defineConfig([
 			// mutable state through explicit parameters everywhere, which is a real refactor
 			// (arguably to a class), not a trivial behavior-preserving extraction. Out of scope
 			// for this task.
-			'max-lines-per-function': ['error', { max: 108, skipBlankLines: true, skipComments: true, IIFEs: true }],
+			'max-lines-per-function': ['error', { max: 106, skipBlankLines: true, skipComments: true, IIFEs: true }],
 		},
 	},
 	// Must stay last: turns off eslint core/typescript-eslint/unicorn rules that oxlint

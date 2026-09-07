@@ -131,4 +131,27 @@ describe('createGraphStore history path', () => {
 		expect(store.state.loadingMore).toBe(false);
 		expect(store.state.rows).toHaveLength(6);
 	});
+
+	it('releases loadingMore even when the load that superseded the pending loadMore fails', async () => {
+		const reader = new FakeReader();
+		reader.commits = linear(7);
+		const store = createGraphStore({ reader, settings: settings() });
+		await store.load();
+		reader.deferLog = true;
+		const more = store.loadMore();
+		reader.deferLog = false;
+		reader.failLog = new Error('fatal: broken');
+		store.setHistoryPath('a.md');
+		await flushPromises();
+		expect(store.state.error).toBe('fatal: broken');
+		expect(store.state.loadingMore).toBe(false);
+		reader.pendingLogs[0]?.(linear(2));
+		await more;
+		expect(store.state.loadingMore).toBe(false);
+		reader.failLog = null;
+		await store.load();
+		expect(store.state.rows).toHaveLength(3);
+		await store.loadMore();
+		expect(store.state.rows).toHaveLength(6);
+	});
 });
