@@ -14,6 +14,8 @@ export interface ViewHost extends SettingsHost {
 	readonly settingsRef: ShallowRef<GitGraphSettings>;
 	readonly changes: Emitter<void>;
 	readonly statusChanges: Emitter<void>;
+	/** Repository-relative path of Obsidian's active file, or null when none is open. */
+	readonly activeFile: ShallowRef<string | null>;
 	viewOpened(): void;
 	viewClosed(): void;
 	openFile(path: string): void;
@@ -52,8 +54,7 @@ export class GitGraphView extends ItemView {
 					settings: host.settingsRef.value,
 					changes: host.changes,
 					statusChanges: host.statusChanges,
-					// TODO(task 4): the plugin starts tracking the workspace's active file next.
-					activeFile: null,
+					activeFile: host.activeFile.value,
 					onUpdateSettings: (patch: Partial<GitGraphSettings>) => void host.updateSettings(patch),
 					onOpenFile: (path: string) => host.openFile(path),
 				}),

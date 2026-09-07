@@ -1,12 +1,12 @@
-import { FileSystemAdapter, Notice, Plugin } from 'obsidian';
-import { isAbsolute, relative, resolve } from 'node:path';
+import { FileSystemAdapter, Notice, Plugin, type TFile } from 'obsidian';
+import { resolve } from 'node:path';
 import { shallowRef } from 'vue';
 import { GitError } from './git/GitError';
 import { GitRepository } from './git/GitRepository';
 import { GitGraphSettingTab } from './settings/GitGraphSettingTab';
 import { DEFAULT_SETTINGS, normalizeSettings, type GitGraphSettings } from './settings/types';
 import { createEmitter } from './util/emitter';
-import { realPath } from './util/paths';
+import { realPath, relativeWithin } from './util/paths';
 import { GIT_GRAPH_ICON, GIT_GRAPH_VIEW, GitGraphView, type ViewHost } from './view/GitGraphView';
 import type { RepoState } from './view/repoState';
 import { createGitWatcher, type GitWatcher } from './watch/gitWatcher';
@@ -22,8 +22,12 @@ export default class GitGraphPlugin extends Plugin implements ViewHost {
 	readonly repoState = shallowRef<RepoState>({ kind: 'unresolved' });
 	readonly changes = createEmitter<void>();
 	readonly statusChanges = createEmitter<void>();
+	/** Repository-relative path of Obsidian's active file, or null while none is known. */
+	readonly activeFile = shallowRef<string | null>(null);
 
 	private watcher: GitWatcher | null = null;
+	/** Vault-relative path of the last file Obsidian opened; survives null `file-open` events. */
+	private activeVaultPath: string | null = null;
 	private openViews = 0;
 	private initGeneration = 0;
 	// Runs in Obsidian's Electron renderer, so timers go through `window` per the
@@ -47,8 +51,21 @@ export default class GitGraphPlugin extends Plugin implements ViewHost {
 		this.addCommand({ id: 'refresh', name: 'Refresh', callback: () => this.refresh() });
 		this.addSettingTab(new GitGraphSettingTab(this.app, this));
 		this.registerVaultWatchers();
+		// Obsidian fires `file-open` with null whenever a non-file leaf becomes active — the graph
+		// pane itself does that when its history toggle is clicked — so null events are ignored and
+		// the history keeps showing the file that is still open in the editor.
+		this.registerEvent(
+			this.app.workspace.on('file-open', (file: TFile | null) => {
+				if (file === null) return;
+				this.activeVaultPath = file.path;
+				this.resolveActiveFile();
+			}),
+		);
 
-		this.app.workspace.onLayoutReady(() => void this.initRepo());
+		this.app.workspace.onLayoutReady(() => {
+			this.activeVaultPath = this.app.workspace.getActiveFile()?.path ?? null;
+			void this.initRepo();
+		});
 	}
 
 	onunload(): void {
@@ -90,6 +107,7 @@ export default class GitGraphPlugin extends Plugin implements ViewHost {
 		this.watcher?.dispose();
 		this.watcher = null;
 		this.repoState.value = { kind: 'unresolved' };
+		this.resolveActiveFile();
 
 		const adapter = this.app.vault.adapter;
 		if (!(adapter instanceof FileSystemAdapter)) {
@@ -110,6 +128,8 @@ export default class GitGraphPlugin extends Plugin implements ViewHost {
 			this.watcher = watcher;
 			if (this.openViews === 0) this.watcher.pause();
 			this.repoState.value = { kind: 'ready', root, reader };
+			// A file opened before the repository resolved is only convertible now.
+			this.resolveActiveFile();
 		} catch (e) {
 			if (gen !== this.initGeneration) return;
 			if (e instanceof GitError && e.code === 'ENOENT') {
@@ -118,6 +138,21 @@ export default class GitGraphPlugin extends Plugin implements ViewHost {
 				this.repoState.value = { kind: 'error', message: e instanceof Error ? e.message : String(e) };
 			}
 		}
+	}
+
+	/**
+	 * Recomputes `activeFile` from the last opened vault file. Null unless the repository is
+	 * ready, a file is known and it lives inside the repository root.
+	 */
+	private resolveActiveFile(): void {
+		const state = this.repoState.value;
+		const adapter = this.app.vault.adapter;
+		const vaultPath = this.activeVaultPath;
+		if (state.kind !== 'ready' || vaultPath === null || !(adapter instanceof FileSystemAdapter)) {
+			this.activeFile.value = null;
+			return;
+		}
+		this.activeFile.value = relativeWithin(state.root, resolve(adapter.getBasePath(), vaultPath));
 	}
 
 	/** Resolves gitDir/commonDir and builds the watcher, bailing out (returning null) if a newer initRepo() has since started. */
@@ -183,13 +218,8 @@ export default class GitGraphPlugin extends Plugin implements ViewHost {
 		const state = this.repoState.value;
 		const adapter = this.app.vault.adapter;
 		if (state.kind !== 'ready' || !(adapter instanceof FileSystemAdapter)) return;
-		const vaultRelative = relative(realPath(adapter.getBasePath()), resolve(realPath(state.root), path)).replaceAll(
-			'\\',
-			'/',
-		);
-		// Only the parent directory itself or a path that climbs out of it is outside; a file
-		// named `..notes.md` is a legitimate vault file.
-		if (vaultRelative === '..' || vaultRelative.startsWith('../') || isAbsolute(vaultRelative)) {
+		const vaultRelative = relativeWithin(adapter.getBasePath(), resolve(realPath(state.root), path));
+		if (vaultRelative === null) {
 			void new Notice(`Git graph: ${path} is outside this vault.`);
 			return;
 		}

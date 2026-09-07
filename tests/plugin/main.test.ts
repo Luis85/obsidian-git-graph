@@ -211,7 +211,7 @@ describe('GitGraphPlugin', () => {
 			app.vault.trigger('create');
 			await vi.advanceTimersByTimeAsync(600);
 			expect(statusChanges).toBe(1);
-			expect(plugin.registeredEvents.map((r) => r.name)).toEqual(['modify', 'create', 'delete', 'rename']);
+			expect(plugin.registeredEvents.map((r) => r.name)).toEqual(['modify', 'create', 'delete', 'rename', 'file-open']);
 			plugin.onunload();
 		});
 
@@ -337,6 +337,55 @@ describe('GitGraphPlugin', () => {
 				rmSync(link, { force: true });
 				expect(existsSync(join(fixture.dir, '.git'))).toBe(true);
 			}
+		});
+	});
+
+	describe('active file tracking', () => {
+		it('tracks the last opened file and ignores a null file-open event', async () => {
+			const plugin = makePlugin(fixture.dir);
+			await plugin.onload();
+			await plugin.initRepo();
+			const app = plugin.app as unknown as App;
+			expect(plugin.activeFile.value).toBeNull();
+			app.workspace.trigger('file-open', { path: 'renamed.md' });
+			expect(plugin.activeFile.value).toBe('renamed.md');
+			// Obsidian fires file-open with null whenever a non-file leaf (the graph pane itself,
+			// when its history toggle is clicked) becomes active; the history must not reset.
+			app.workspace.trigger('file-open', null);
+			expect(plugin.activeFile.value).toBe('renamed.md');
+			plugin.onunload();
+		});
+
+		it('seeds the active file from the workspace on layout ready', async () => {
+			const plugin = makePlugin(fixture.dir);
+			(plugin.app as unknown as App).workspace.activeFile = { path: 'renamed.md' };
+			await plugin.onload();
+			await plugin.initRepo();
+			expect(plugin.activeFile.value).toBe('renamed.md');
+			plugin.onunload();
+		});
+
+		it('reports a file opened before the repository resolved once the state is ready', async () => {
+			const plugin = makePlugin(fixture.dir);
+			await plugin.onload();
+			(plugin.app as unknown as App).workspace.trigger('file-open', { path: 'renamed.md' });
+			expect(plugin.repoState.value.kind).toBe('unresolved');
+			expect(plugin.activeFile.value).toBeNull();
+			await plugin.initRepo();
+			expect(plugin.activeFile.value).toBe('renamed.md');
+			plugin.onunload();
+		});
+
+		it('reports a sub-vault file relative to the repository root', async () => {
+			// As with the sub-vault openFile test, the vault base here is a subfolder of the fixture.
+			const sub = join(fixture.dir, 'sub');
+			mkdirSync(sub, { recursive: true });
+			const plugin = makePlugin(sub);
+			await plugin.onload();
+			await plugin.initRepo();
+			(plugin.app as unknown as App).workspace.trigger('file-open', { path: 'x.md' });
+			expect(plugin.activeFile.value).toBe('sub/x.md');
+			plugin.onunload();
 		});
 	});
 

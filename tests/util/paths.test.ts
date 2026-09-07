@@ -2,7 +2,7 @@ import { mkdtempSync, realpathSync, rmSync, symlinkSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { realPath, samePath } from '../../src/util/paths';
+import { realPath, relativeWithin, samePath } from '../../src/util/paths';
 
 describe('paths', () => {
 	it('realPath canonicalizes an existing path and resolves a missing one', () => {
@@ -12,6 +12,21 @@ describe('paths', () => {
 			expect(realPath(join(dir, 'missing'))).toBe(resolve(join(dir, 'missing')));
 		} finally {
 			rmSync(dir, { recursive: true, force: true });
+		}
+	});
+
+	it('relativeWithin reports a path inside the base and null for anything outside it', () => {
+		const base = realpathSync.native(mkdtempSync(join(tmpdir(), 'git-graph-paths-')));
+		const other = realpathSync.native(mkdtempSync(join(tmpdir(), 'git-graph-paths-other-')));
+		try {
+			expect(relativeWithin(base, join(base, 'a', 'b.md'))).toBe('a/b.md');
+			// A file whose name starts with two dots stays inside; only `..` itself climbs out.
+			expect(relativeWithin(base, join(base, '..notes.md'))).toBe('..notes.md');
+			expect(relativeWithin(base, resolve(base, '..'))).toBeNull();
+			expect(relativeWithin(base, other)).toBeNull();
+		} finally {
+			rmSync(base, { recursive: true, force: true });
+			rmSync(other, { recursive: true, force: true });
 		}
 	});
 
