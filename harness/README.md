@@ -34,6 +34,7 @@ Everything is driven by the query string, so a screenshot or a test is one URL.
 | `refs` | `auto`, `all` | `auto` | `settings.refFilter` — what the header dropdown shows and what the store passes to `log()`. |
 | `filter` | any text | none | Types the text into the commit filter box once the first load settles. |
 | `expand` | hash prefix or subject text | none | Opens that commit's details once the first load settles. The row has to be rendered (they are virtualized, so pick one near the top). An `expand` that matches no commit, or matches one whose row isn't rendered, rejects `ready` instead of silently rendering a plausible page. |
+| `file` | a file path | none | Sets `activeFile` and clicks the history toggle once the first load settles, so the pane shows only the commits that touched that path. Rejects `ready` if `.git-graph-history-toggle` never renders `.git-graph-history-file` (same fail-loudly rule as `expand`). |
 | `dateFormat` | `relative`, `absolute` | `relative` | `settings.dateFormat`. Use `absolute` when you want a stable date column. |
 | `dirtyRow` | `0`, `1` | `1` | `settings.showDirtyRow`. |
 | `pageSize` | number ≥ 10 | `200` | `settings.pageSize`; lower it to make paging happen sooner. |
@@ -47,6 +48,7 @@ http://localhost:5174/?scenario=branches&theme=dark
 http://localhost:5174/?scenario=merge&expand=Initial+commit&dateFormat=absolute
 http://localhost:5174/?scenario=long&pageSize=25&height=400
 http://localhost:5174/?scenario=dirty&filter=Fix
+http://localhost:5174/?scenario=merge&file=README.md
 ```
 
 ## Scenarios
@@ -85,6 +87,7 @@ window.__harness = {
   emitChange(),       // fires the `changes` emitter — the plugin's "files changed" signal
   emitStatusChange(), // fires the `statusChanges` emitter — the plugin's debounced vault-edit signal
   setFilter(text),    // types into the commit filter box
+  setActiveFile(path),// sets (or clears, with null) the active file GraphRoot receives; does not click the toggle itself
 };
 ```
 
@@ -96,10 +99,11 @@ while empty and clears on the next `changes`/`statusChanges` emit (the Emit chan
 `emitChange()`, `emitStatusChange()`) or toolbar navigation.
 
 `ready` is the thing to wait on. It resolves after the view reaches a terminal state (rows
-rendered, or an empty/error state shown), after any `filter=`/`expand=` parameter has been
-applied, and after two animation frames so Vue has flushed. It **rejects** (after 15 s) if the
-view never settles, and it also rejects immediately if `expand=` names no commit in the
-scenario or a commit whose row isn't rendered — so a broken harness fails loudly instead of
+rendered, or an empty/error state shown), after any `filter=`/`expand=`/`file=` parameter has
+been applied, and after two animation frames so Vue has flushed. It **rejects** (after 15 s) if
+the view never settles, and it also rejects immediately if `expand=` names no commit in the
+scenario or a commit whose row isn't rendered, or if `file=` is set but the history toggle
+never renders `.git-graph-history-file` — so a broken harness fails loudly instead of
 screenshotting a blank or merely plausible frame. Never `waitForTimeout`; do this:
 
 ```js

@@ -409,10 +409,11 @@ export function scenarioCommits(name: string): Commit[] {
 const delay = (ms: number): Promise<void> => (ms <= 0 ? Promise.resolve() : new Promise((resolve) => window.setTimeout(resolve, ms)));
 
 /**
- * A GitReader over one fixture. `log` honours skip/count so paging is real; it ignores the ref
- * filter, because a fixture is a pre-baked commit list rather than a graph walk — changing
- * `refs=auto|all` in the harness changes the header dropdown and what the store asks for, not
- * which commits come back.
+ * A GitReader over one fixture. `log` honours skip/count so paging is real, and honours `path`
+ * by keeping only commits whose fixture file list (`detailsFor`) contains it, so the history
+ * toggle shows a real subset. It ignores the ref filter, because a fixture is a pre-baked commit
+ * list rather than a graph walk — changing `refs=auto|all` in the harness changes the header
+ * dropdown and what the store asks for, not which commits come back.
  */
 export function createScenarioReader(name: string): GitReader {
 	const f = fixtureFor(name);
@@ -422,10 +423,11 @@ export function createScenarioReader(name: string): GitReader {
 	let logCalls = 0;
 
 	return {
-		log({ skip, count }) {
+		log({ skip, count, path }) {
 			logCalls++;
 			if (f.failLogAfterFirst === true && logCalls > 1) return Promise.reject(new Error('fatal: bad object HEAD'));
-			return Promise.resolve(f.commits.slice(skip, skip + count));
+			const commits = path === undefined ? f.commits : f.commits.filter((c) => detailsFor(c).files.some((file) => file.path === path));
+			return Promise.resolve(commits.slice(skip, skip + count));
 		},
 		refs: () => Promise.resolve(snapshot),
 		status: () => Promise.resolve({ changed: f.changed }),

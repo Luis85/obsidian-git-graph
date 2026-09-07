@@ -220,6 +220,23 @@ test('a deleted file in the dirty changes row is muted and cannot be opened', as
 	expect(await page.evaluate(() => window.__harness.opened)).toHaveLength(0);
 });
 
+test('history filters rows to only the commits touching the active file', async ({ page }) => {
+	await open(page, 'scenario=merge&file=README.md');
+	// Derived once from harness/fixtures.ts's detailsFor(): of the merge scenario's 8 commits,
+	// running the fixture's FNV-1a hash-and-sample algorithm by hand shows exactly one commit's
+	// file list contains README.md ("Add a search box to the graph header"). Fixed because the
+	// fixture is a pure function of the commit id, not the wall clock or randomness.
+	await expect(page.locator('.git-graph-row')).toHaveCount(1);
+	await expect(page.locator('svg.git-graph-lanes')).toHaveCount(0);
+	await expect(page.locator('.git-graph-history-file')).toHaveText('README.md');
+	await expect(page.locator('.git-graph-history-toggle')).toHaveAttribute('aria-pressed', 'true');
+});
+
+test('history reports no commits for a file none of them touched', async ({ page }) => {
+	await open(page, 'scenario=merge&file=no/such.md');
+	await expect(page.locator('.git-graph-empty')).toHaveText('No commits for this file yet.');
+});
+
 test('the toolbar lists every scenario and navigates when one is picked', async ({ page }) => {
 	await open(page, 'scenario=merge');
 	const count = await page.evaluate(() => window.__harness.scenarios.length);
