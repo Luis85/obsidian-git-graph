@@ -49,8 +49,10 @@ export interface GitReader {
 	 * `GitRepository` anchors it with the `:(top,literal)` pathspec magic accordingly, which also
 	 * stops a name like `Meeting [2026].md` being read as a glob.
 	 *
-	 * `fallbackPaths` are earlier paths of `path`, newest first; the first one with any history
-	 * is served when `path` has none yet — an uncommitted rename.
+	 * `fallbackPaths` are earlier paths of `path`, newest first, for the window in which a rename
+	 * is not committed: while HEAD does not contain `path` they are tried before it, so a deleted
+	 * stranger that once had the same name cannot stand in for the open note; the first path
+	 * with any history is served.
 	 */
 	log(opts: { skip: number; count: number; refs: RefFilter; path?: string; fallbackPaths?: readonly string[] }): Promise<Commit[]>;
 	refs(): Promise<RefsSnapshot>;

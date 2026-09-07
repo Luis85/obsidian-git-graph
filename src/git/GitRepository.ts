@@ -82,14 +82,26 @@ export class GitRepository implements GitReader {
 	 * everything recorded under the newer one. The choice is made on the unsliced result, so it
 	 * does not depend on which page is being fetched — a path with any history at all wins, even
 	 * when this page of it happens to be past its last commit.
+	 *
+	 * While the rename is uncommitted, `path` itself goes last: HEAD does not contain it, so any
+	 * history `--follow` finds under that name belongs to some earlier, since-deleted file that
+	 * happened to have it — not to the open note. Once HEAD names `path` (the rename committed,
+	 * or the file never renamed) its history is the complete one and it is asked first.
 	 */
 	private async logFollowing(selection: string[], skip: number, count: number, path: string, fallbackPaths: readonly string[]): Promise<Commit[]> {
-		for (const candidate of [path, ...fallbackPaths]) {
+		const pathFirst = fallbackPaths.length === 0 || (await this.inHead(path));
+		const candidates = pathFirst ? [path, ...fallbackPaths] : [...fallbackPaths, path];
+		for (const candidate of candidates) {
 			// Sequential on purpose: each path is only queried because the previous one was empty.
 			const commits = await this.runFollow(selection, skip + count, candidate);
 			if (commits.length > 0) return commits.slice(skip);
 		}
 		return [];
+	}
+
+	/** True when HEAD's tree contains `path` (repository-relative; `<rev>:<path>` is always root-relative). */
+	private async inHead(path: string): Promise<boolean> {
+		return (await this.tryRun(['cat-file', '-e', `HEAD:${path}`])) !== null;
 	}
 
 	private async runFollow(selection: string[], max: number, path: string): Promise<Commit[]> {

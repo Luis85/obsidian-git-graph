@@ -221,6 +221,40 @@ describe('log with a path', () => {
 		}
 	});
 
+	// A rename onto a path an unrelated, since-deleted file once had: `--follow` on the new path
+	// is not empty, but what it finds is the other file's history. While the rename is uncommitted
+	// HEAD does not contain the new path, so the earlier paths are asked first.
+	it('prefers the rename source over a deleted stranger\'s history at the destination while the rename is uncommitted', async () => {
+		const tmp = createEmptyRepo('git-graph-reused-name-');
+		try {
+			writeFileSync(join(tmp.dir, 'b.md'), 'stranger\n');
+			tmp.git('add', '.');
+			tmp.git('commit', '-q', '-m', 'Add an unrelated b.md');
+			const stranger = tmp.git('rev-parse', 'HEAD');
+			tmp.git('rm', '-q', 'b.md');
+			tmp.git('commit', '-q', '-m', 'Delete the unrelated b.md');
+			const strangerGone = tmp.git('rev-parse', 'HEAD');
+			writeFileSync(join(tmp.dir, 'a.md'), 'a\n');
+			tmp.git('add', '.');
+			tmp.git('commit', '-q', '-m', 'Add a.md');
+			const added = tmp.git('rev-parse', 'HEAD');
+			tmp.git('mv', 'a.md', 'b.md');
+			const reused = new GitRepository({ gitPath: 'git', cwd: tmp.dir });
+			const pending = await reused.log({ skip: 0, count: 10, refs: 'all', path: 'b.md', fallbackPaths: ['a.md'] });
+			expect(pending.map((c) => c.hash)).toEqual([added]);
+			// Without a known earlier path there is nothing better to offer than what git has for b.md.
+			const unaware = await reused.log({ skip: 0, count: 10, refs: 'all', path: 'b.md' });
+			expect(unaware.map((c) => c.hash)).toEqual([strangerGone, stranger]);
+			// Once the rename is committed, HEAD contains b.md and its own history is the answer.
+			tmp.git('commit', '-q', '-m', 'Rename a.md to b.md');
+			const moved = tmp.git('rev-parse', 'HEAD');
+			const settled = await reused.log({ skip: 0, count: 10, refs: 'all', path: 'b.md', fallbackPaths: ['a.md'] });
+			expect(settled.map((c) => c.hash)).toEqual([moved, added]);
+		} finally {
+			tmp.dispose();
+		}
+	});
+
 	it('omitting path still yields the full history', async () => {
 		const commits = await repo.log({ skip: 0, count: 200, refs: 'all' });
 		expect(commits).toHaveLength(5);
