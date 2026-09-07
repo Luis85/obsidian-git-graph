@@ -33,6 +33,13 @@ test('dirty adds a working tree row above the commits', async ({ page }) => {
 	await expect(page.locator('.git-graph-row')).toHaveCount(9);
 });
 
+test('empty-dirty shows the changes row and no commit rows', async ({ page }) => {
+	await open(page, 'scenario=empty-dirty');
+	await expect(page.locator('.git-graph-row-dirty')).toHaveCount(1);
+	await expect(page.locator('.git-graph-row:not(.git-graph-row-dirty)')).toHaveCount(0);
+	await expect(page.locator('.git-graph-empty')).toHaveCount(0);
+});
+
 test('dirty expands the changes row into the working tree files', async ({ page }) => {
 	await open(page, 'scenario=dirty');
 	await expect(page.locator('.git-graph-dirty-details')).toHaveCount(0);
@@ -156,6 +163,13 @@ test('octopus renders a merge node with three parents', async ({ page }) => {
 	await open(page, 'scenario=octopus');
 	await expect(page.locator('circle.git-graph-node-merge').first()).toBeVisible();
 	await expect(page.locator('.git-graph-row').first()).toContainText('Merge');
+});
+
+test('page-end-merge fans the last row into three separate lines off the bottom', async ({ page }) => {
+	await open(page, 'scenario=page-end-merge');
+	const lastRow = page.locator('.git-graph-row').last();
+	await expect(lastRow).toContainText('Merge');
+	await expect(lastRow.locator('.git-graph-lanes path')).toHaveCount(3);
 });
 
 test('expand opens a commit from the URL and dateFormat switches the date column', async ({ page }) => {

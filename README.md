@@ -16,13 +16,33 @@ Deleted files are shown struck through and cannot be opened.
 - `git` installed. If it is not on your PATH, set the executable in the plugin settings.
 - git 2.13 or newer (`--absolute-git-dir` is used to resolve the repository's `.git` directory).
 
+## What the plugin touches
+
+Obsidian's community-plugin review flags any plugin that uses Node's `fs` module or runs
+external programs. This one does both, for exactly these purposes, and nothing else:
+
+- **Runs the `git` executable** (the one from the *Git executable* setting) with
+  `child_process.execFile` — never through a shell — to read the repository: `rev-parse`,
+  `log`, `for-each-ref`, `status`, `show`, `diff-tree`, `symbolic-ref`. No command writes to
+  the repository or the working tree; the plugin has no commit, checkout, fetch or push.
+- **Reads the repository's `.git` directory** with `fs.existsSync` and `fs.watch` so the
+  pane refreshes when a commit, branch or checkout happens. For a vault that is a folder
+  inside a larger repository, that directory sits outside the vault. The plugin never
+  writes there.
+- **Resolves real paths** (`fs.realpathSync.native`) of the vault folder and the repository
+  root so a vault opened through a symlink or junction matches the paths git reports.
+
+Files are opened in the editor through Obsidian's vault API only. The plugin makes no
+network requests and collects no telemetry.
+
 ## Usage
 
 Open the pane from the ribbon icon, or from the command palette: **Git Graph: Open**.
 **Git Graph: Refresh** re-reads the repository on demand; the pane also refreshes on its
 own when the repository's git state changes (commits, branches, checkouts). Working-tree
 edits (unstaged/staged file changes) refresh the changes row within about half a second
-while the pane is open; a git-state change still refreshes the whole graph.
+while the pane is open; a git-state change still refreshes the whole graph. When the vault
+is a folder inside a larger repository, the row counts only files under the vault.
 
 ## Settings
 
@@ -31,7 +51,7 @@ while the pane is open; a git-state change still refreshes the whole graph.
 | Git executable | `git` | Command or path used to run git. |
 | Refs to show | Auto | Auto: current branch, its upstream, default remote branch. All: every branch and tag. |
 | Commits per page | 200 | Loaded at once; more load as you scroll. |
-| Show working tree changes | on | Row above the newest commit with the uncommitted change count; click it for the file list. |
+| Show working tree changes | on | Row above the newest commit with the uncommitted change count for files inside the vault; click it for the file list. |
 | Date format | Relative | "3 days ago" or `YYYY-MM-DD HH:mm`. |
 
 ## Development

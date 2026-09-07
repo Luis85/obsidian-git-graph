@@ -45,6 +45,21 @@ describe('GraphRoot', () => {
 		expect(w.find('.git-graph-row-dirty').exists()).toBe(false);
 	});
 
+	it('shows the changes row, not "No commits yet.", for a repository with changes but no commits', async () => {
+		const reader = new FakeReader();
+		reader.commits = [];
+		reader.refsSnapshot = { refs: [], headHash: null, headBranch: 'main' };
+		reader.changed = 2;
+		reader.dirtyFiles = [{ path: 'first.md', status: 'A' }];
+		const w = mountRoot({ kind: 'ready', root: 'C:/vault', reader });
+		await flushPromises();
+		expect(w.text()).not.toContain('No commits yet');
+		expect(w.get('.git-graph-row-dirty').text()).toContain('2 changes');
+		await w.get('.git-graph-row-dirty').trigger('click');
+		await flushPromises();
+		expect(w.text()).toContain('first.md');
+	});
+
 	it('reloads exactly once per settings change (a single settings prop update, not a double load)', async () => {
 		const reader = new FakeReader();
 		reader.commits = linear(1);

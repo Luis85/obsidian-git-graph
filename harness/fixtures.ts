@@ -295,6 +295,29 @@ const stacked = (): Fixture =>
 		changed: 0,
 	});
 
+// A short linear history on main (e0 to the root e1), plus a second tip (a three-parent
+// octopus merge, e2) whose parents are all outside the loaded commits. e2 is unconnected to
+// main's chain — a merge commit reachable only through its own branch, the way a page can end
+// on a second tip once every ref is followed — so its row exercises offBottomColumn's fan-out
+// fallback in src/graph/layout.ts with no incoming line of its own: three lines leave the
+// bottom, one per parent, each claiming its own column.
+const pageEndMerge = (): Fixture =>
+	fixture('page-end-merge', {
+		commits: [
+			{ id: 'e0', subject: 'Add the page-end-merge harness scenario', parents: ['e1'] },
+			{ id: 'e1', subject: 'Initial commit' },
+			{ id: 'e2', subject: "Merge branches 'alpha', 'beta' and 'gamma' into main", parents: ['alpha', 'beta', 'gamma'] },
+		],
+		refs: [
+			{ id: 'e0', name: 'main', kind: 'branch', isHead: true, upstream: 'origin/main' },
+			{ id: 'e0', name: 'origin/main', kind: 'remote' },
+			{ id: 'e2', name: 'feature/merged-elsewhere', kind: 'branch' },
+		],
+		headId: 'e0',
+		headBranch: 'main',
+		changed: 0,
+	});
+
 const LONG_COUNT = 600;
 const LONG_VERBS = ['Add', 'Fix', 'Refactor', 'Document', 'Simplify', 'Speed up', 'Guard'] as const;
 const LONG_TOPICS = [
@@ -338,9 +361,11 @@ const FIXTURES: Record<string, () => Fixture> = {
 	octopus,
 	branches,
 	stacked,
+	'page-end-merge': pageEndMerge,
 	long,
 	dirty: () => ({ ...merge('dirty', 3), dirtyFiles: DIRTY_FILES }),
 	empty,
+	'empty-dirty': () => ({ ...empty(), changed: 2, dirtyFiles: DIRTY_FILES.slice(0, 2) }),
 	error: () => ({ ...linear('error'), failLogAfterFirst: true }),
 	slow: () => merge('slow', 0, 1500),
 };
@@ -351,9 +376,11 @@ export const SCENARIOS: readonly Scenario[] = [
 	{ name: 'octopus', description: 'A three-parent octopus merge.' },
 	{ name: 'branches', description: 'Four open lanes, remotes and tags, with HEAD below the first row.' },
 	{ name: 'stacked', description: 'Nested feature merges: the left lane stays with the tip, side lanes slide in as lines end.' },
+	{ name: 'page-end-merge', description: 'The page ends on a three-parent merge whose parents are not loaded: three lines leave the bottom.' },
 	{ name: 'long', description: `${LONG_COUNT} commits, so scrolling to the bottom pages in more.` },
 	{ name: 'dirty', description: 'The merge history plus three uncommitted working tree changes; the changes row expands.' },
 	{ name: 'empty', description: 'A repository with no commits yet.' },
+	{ name: 'empty-dirty', description: 'No commits yet, but two uncommitted files: only the changes row shows.' },
 	{ name: 'error', description: 'The first load succeeds, every later one fails: banner over kept rows.', refreshAfterLoad: true },
 	{ name: 'slow', description: 'Commit details take 1.5 s to resolve, for the details loading state.' },
 	{ name: 'none', description: 'The vault is not inside a git repository.', state: 'none' },
@@ -379,7 +406,7 @@ export function scenarioCommits(name: string): Commit[] {
 	return fixtureFor(name).commits;
 }
 
-const delay = (ms: number): Promise<void> => (ms <= 0 ? Promise.resolve() : new Promise((resolve) => setTimeout(resolve, ms)));
+const delay = (ms: number): Promise<void> => (ms <= 0 ? Promise.resolve() : new Promise((resolve) => window.setTimeout(resolve, ms)));
 
 /**
  * A GitReader over one fixture. `log` honours skip/count so paging is real; it ignores the ref

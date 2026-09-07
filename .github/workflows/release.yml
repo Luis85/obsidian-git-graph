@@ -61,9 +61,13 @@ jobs:
       # It WAITS rather than merely checking, because `git push --follow-tags` pushes the
       # branch and the tag together: this workflow starts on the tag while CI is still
       # starting on the branch, so a plain check would refuse the documented path every
-      # time. Every outcome other than success is fatal, including "no verify runs found"
-      # — CI names that job `verify`, and if it is ever renamed this guard must be updated
-      # rather than silently passing everything.
+      # time. Every check run named `verify*`, plus the one named `audit`, must have
+      # concluded successfully; a group that hasn't reported yet is treated as pending
+      # until the deadline below. A failed conclusion is checked before either group's
+      # presence, so a leg that fails fast is reported as "failed" even while the other
+      # group is still queued, rather than masked as "pending" until the deadline. The
+      # fatal verdicts are "missing" and "failed" — renaming either CI job means updating
+      # this guard in the same edit.
       - name: Require a green CI run on this commit
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -83,11 +87,13 @@ jobs:
           deadline=$(( SECONDS + 900 ))
           while :; do
             verdict="$(gh api "repos/$GITHUB_REPOSITORY/commits/$GITHUB_SHA/check-runs" \
-              --jq '[.check_runs[] | select(.name | startswith("verify"))]
-                    | if length == 0 then "missing"
+              --jq '[.check_runs[] | select((.name | startswith("verify")) or .name == "audit")]
+                    | if any(.conclusion != null and .conclusion != "success") then "failed"
+                      elif length == 0 then "missing"
+                      elif ([.[] | select(.name | startswith("verify"))] | length) == 0 then "pending"
+                      elif ([.[] | select(.name == "audit")] | length) == 0 then "pending"
                       elif any(.status != "completed") then "pending"
-                      elif all(.conclusion == "success") then "success"
-                      else "failed" end')"
+                      else "success" end')"
             case "$verdict" in
               success) break ;;
               failed)
@@ -98,7 +104,7 @@ jobs:
                 if [ "$SECONDS" -ge "$deadline" ]; then
                   echo "Gave up waiting for CI on $GITHUB_SHA (last seen: $verdict)." >&2
                   echo "'pending' means CI was still running — re-run this workflow once it finishes." >&2
-                  echo "'missing' means no job named 'verify' reported at all; if CI's job was renamed, this guard needs the new name." >&2
+                  echo "'missing' means no job named 'verify' or 'audit' reported at all; if CI's jobs were renamed, this guard needs the new names." >&2
                   exit 1
                 fi
                 sleep 20

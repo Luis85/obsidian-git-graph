@@ -1,7 +1,7 @@
 {
   "id": "git-graph",
   "name": "Git Graph",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "minAppVersion": "1.13.0",
   "description": "VS Code's source control graph as a side pane: lanes, refs, and commit details for the vault's git repository.",
   "author": "Luis85",

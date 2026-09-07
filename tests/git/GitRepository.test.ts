@@ -94,6 +94,21 @@ describe('log', () => {
 		expect(commits).toHaveLength(5);
 	});
 
+	it('refs=auto still lists HEAD history when origin/HEAD points at a pruned branch', async () => {
+		const tmp = createFixtureRepo();
+		try {
+			// A symbolic ref may point at a ref that no longer exists (the remote's default branch
+			// was renamed, or the tracking ref was pruned); git log must not be asked for it.
+			execFileSync('git', ['symbolic-ref', 'refs/remotes/origin/HEAD', 'refs/remotes/origin/gone'], { cwd: tmp.dir });
+			const dangling = new GitRepository({ gitPath: 'git', cwd: tmp.dir });
+			const commits = await dangling.log({ skip: 0, count: 200, refs: 'auto' });
+			expect(commits.map((c) => c.hash)).toContain(tmp.hashes.tip);
+			expect(commits).toHaveLength(5);
+		} finally {
+			tmp.dispose();
+		}
+	});
+
 	it('returns [] for a repository with no commits', async () => {
 		const empty = createEmptyRepo('git-graph-empty-');
 		try {
@@ -154,6 +169,20 @@ describe('status', () => {
 	it('lists the changed files with their status', async () => {
 		const files = await repo.statusFiles();
 		expect(files).toEqual(expect.arrayContaining([{ path: 'x.txt', status: 'A' }, { path: 'renamed.md', status: 'M' }]));
+	});
+
+	it('counts and lists only the files under cwd when cwd is a subdirectory of the repository', async () => {
+		const tmp = createFixtureRepo();
+		try {
+			mkdirSync(join(tmp.dir, 'sub'));
+			writeFileSync(join(tmp.dir, 'sub', 'inside.md'), 'inside\n');
+			writeFileSync(join(tmp.dir, 'outside.md'), 'outside\n');
+			const subRepo = new GitRepository({ gitPath: 'git', cwd: join(tmp.dir, 'sub') });
+			expect(await subRepo.status()).toEqual({ changed: 1 });
+			expect(await subRepo.statusFiles()).toEqual([{ path: 'sub/inside.md', status: 'A' }]);
+		} finally {
+			tmp.dispose();
+		}
 	});
 });
 

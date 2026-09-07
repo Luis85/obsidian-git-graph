@@ -45,7 +45,7 @@ const nodeClasses = computed(() => ({
   >
     <path
       v-for="s in row.segments"
-      :key="`${s.kind}:${s.fromLane}:${s.toLane}`"
+      :key="`${s.kind}:${s.fromLane}:${s.toLane}:${s.color}`"
       :class="['git-graph-segment', `git-graph-lane-${s.color}`]"
       :d="pathFor(s)"
     />

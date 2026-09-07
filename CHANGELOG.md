@@ -20,6 +20,18 @@ See [RELEASING.md](RELEASING.md) for how this file is kept in step with a releas
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-09-07
+
+### Changed
+- For a vault that is a folder inside a larger repository, the changes row now counts and lists only files under the vault, so it no longer goes stale on edits the pane cannot see.
+
+### Fixed
+- The release workflow now also waits for CI's `npm audit` job before publishing, instead of publishing as soon as the build and test runs are green.
+- With "Refs to show" on Auto, a stale `origin/HEAD` (the remote's default branch renamed or pruned) no longer makes the whole graph fail with "bad revision".
+- A file whose name begins with two dots (such as `..notes.md`) now opens from the commit and changes lists instead of being reported as outside the vault.
+- A repository with uncommitted files but no commits yet shows the changes row instead of only "No commits yet".
+- When a page of commits ends on a merge whose parents are all on the next page, each parent now gets its own line off the bottom of the graph instead of all of them overlapping in one.
+
 ## [0.2.0] - 2026-09-07
 
 ### Changed

@@ -9,7 +9,8 @@ import oxlint from 'eslint-plugin-oxlint';
 
 const SRC = ['src/**/*.ts', 'src/**/*.vue'];
 // The harness is application-shaped but not plugin code: it lints on the same tier as
-// tests and root tooling, never with obsidianmd's plugin-guideline rules.
+// tests and root tooling, plus only the two obsidianmd rules the community-plugin scan
+// reports on it (see the harness entry below).
 const TESTS = ['tests/**/*.ts', 'harness/**/*.ts'];
 const tsconfigRootDir = fileURLToPath(new URL('.', import.meta.url));
 // obsidianmd's recommended config pulls in typescript-eslint's type-checked rules for
@@ -84,6 +85,19 @@ export default defineConfig([
 		rules: {
 			'@typescript-eslint/no-explicit-any': 'off',
 			'@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_', varsIgnorePattern: '^_' }],
+		},
+	},
+	{
+		// The harness never runs inside Obsidian, but the community-plugin scan reads every
+		// file in the repository and reports these two rules on it, so it follows them.
+		// obsidianmd/prefer-create-el needs type information, so this entry also points the
+		// parser at the project's tsconfig (harness/**/*.ts is included there already).
+		files: ['harness/**/*.ts'],
+		plugins: { obsidianmd },
+		languageOptions: { parser: tsparser, parserOptions: typeAwareParserOptions },
+		rules: {
+			'obsidianmd/prefer-window-timers': 'error',
+			'obsidianmd/prefer-create-el': 'error',
 		},
 	},
 	{

@@ -119,14 +119,7 @@ function navigate(key: string, value: string): void {
 function fillSelect(id: string, options: readonly { value: string; label: string }[], selected: string, key: string): void {
 	const select = document.querySelector<HTMLSelectElement>(`#${id}`);
 	if (select === null) return;
-	select.replaceChildren(
-		...options.map((option) => {
-			const el = document.createElement('option');
-			el.value = option.value;
-			el.textContent = option.label;
-			return el;
-		}),
-	);
+	select.replaceChildren(...options.map((option) => new Option(option.label, option.value)));
 	select.value = selected;
 	select.addEventListener('change', () => navigate(key, select.value));
 }
@@ -148,7 +141,7 @@ buildToolbar();
 
 // --- readiness ------------------------------------------------------------------------------
 
-const nextFrame = (): Promise<void> => new Promise((resolve) => requestAnimationFrame(() => resolve()));
+const nextFrame = (): Promise<void> => new Promise((resolve) => window.requestAnimationFrame(() => resolve()));
 
 async function waitFor(predicate: () => boolean, what: string): Promise<void> {
 	const deadline = performance.now() + READY_TIMEOUT_MS;

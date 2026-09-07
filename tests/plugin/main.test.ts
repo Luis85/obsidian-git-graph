@@ -282,6 +282,22 @@ describe('GitGraphPlugin', () => {
 			plugin.onunload();
 		});
 
+		it('opens a vault file whose name starts with two dots, and still rejects the parent directory', async () => {
+			const plugin = makePlugin(fixture.dir);
+			await plugin.onload();
+			await plugin.initRepo();
+			const app = plugin.app as unknown as App;
+			app.vault.files.set('..notes.md', { path: '..notes.md' });
+			Notice.shown.length = 0;
+			plugin.openFile('..notes.md');
+			expect(Notice.shown).toEqual([]);
+			expect(app.workspace.opened).toEqual(['..notes.md']);
+			plugin.openFile('..');
+			expect(Notice.shown.at(-1)).toContain('outside this vault');
+			expect(app.workspace.opened).toHaveLength(1);
+			plugin.onunload();
+		});
+
 		it('opens a file from a sub-vault, and notices for a repo-root file outside it', async () => {
 			// Runs after the status-dependent tests in this file so it doesn't perturb their counts:
 			// the vault base here is a subfolder of the fixture, not the fixture root.

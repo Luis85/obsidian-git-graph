@@ -187,7 +187,9 @@ export default class GitGraphPlugin extends Plugin implements ViewHost {
 			'\\',
 			'/',
 		);
-		if (vaultRelative.startsWith('..') || isAbsolute(vaultRelative)) {
+		// Only the parent directory itself or a path that climbs out of it is outside; a file
+		// named `..notes.md` is a legitimate vault file.
+		if (vaultRelative === '..' || vaultRelative.startsWith('../') || isAbsolute(vaultRelative)) {
 			void new Notice(`Git graph: ${path} is outside this vault.`);
 			return;
 		}
