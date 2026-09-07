@@ -27,6 +27,7 @@ export interface GraphState extends StatusState {
 	detailsError: string | null;
 	filterText: string;
 	historyPath: string | null;
+	historyFallbackPath: string | null;
 }
 
 export interface GraphStore {
@@ -39,7 +40,7 @@ export interface GraphStore {
 	toggleExpand(hash: string): Promise<void>;
 	toggleDirty(): Promise<void>;
 	setFilter(text: string): void;
-	setHistoryPath(path: string | null): void;
+	setHistoryPath(path: string | null, fallbackPath?: string | null): void;
 	dispose(): void;
 }
 
@@ -74,17 +75,24 @@ function createExpandToggler(deps: GraphStoreDeps, state: GraphState, isDisposed
 	};
 }
 
-/** Assembles `reader.log` options, including `path` only when a history path is set (never `path: undefined`). */
-function logOptions(state: GraphState, refFilter: RefFilter, skip: number, count: number): { skip: number; count: number; refs: RefFilter; path?: string } {
+/** Assembles `reader.log` options, including `path`/`fallbackPath` only when set (never `path: undefined`). */
+function logOptions(state: GraphState, refFilter: RefFilter, skip: number, count: number): { skip: number; count: number; refs: RefFilter; path?: string; fallbackPath?: string } {
 	if (state.historyPath === null) return { skip, count, refs: refFilter };
-	return { skip, count, refs: refFilter, path: state.historyPath };
+	if (state.historyFallbackPath === null) return { skip, count, refs: refFilter, path: state.historyPath };
+	return { skip, count, refs: refFilter, path: state.historyPath, fallbackPath: state.historyFallbackPath };
 }
 
-/** Builds `setHistoryPath`: switches the path filter, drops the rows of the old scope, resets pagination to one page, collapses any expansion, and reloads. */
-function createHistoryPathSetter(state: GraphState, byHash: Map<string, Commit>, collapse: () => void, load: () => Promise<void>): (path: string | null) => void {
-	return function setHistoryPath(path: string | null): void {
-		if (state.historyPath === path) return;
+/**
+ * Builds `setHistoryPath`: switches the path filter, drops the rows of the old scope, resets
+ * pagination to one page, collapses any expansion, and reloads. `fallbackPath` is the path git
+ * may still know while a rename of `path` is uncommitted; changing only it is still a scope
+ * change, so both take part in the same-value check.
+ */
+function createHistoryPathSetter(state: GraphState, byHash: Map<string, Commit>, collapse: () => void, load: () => Promise<void>): (path: string | null, fallbackPath?: string | null) => void {
+	return function setHistoryPath(path: string | null, fallbackPath: string | null = null): void {
+		if (state.historyPath === path && state.historyFallbackPath === fallbackPath) return;
 		state.historyPath = path;
+		state.historyFallbackPath = fallbackPath;
 		state.loadedCount = 0;
 		// The loaded commits belong to the previous scope. Clearing them here (rather than
 		// waiting for the new log) keeps another file's history from showing under this file's
@@ -98,9 +106,16 @@ function createHistoryPathSetter(state: GraphState, byHash: Map<string, Commit>,
 	};
 }
 
-/** Applies a completed `load()`: rows/refs/head are replaced wholesale. Status is applied separately, by `statusSync`. */
+/**
+ * Applies a completed `load()`: rows/refs/head are replaced wholesale. Status is applied
+ * separately, by `statusSync`. A `loadMore` this load superseded no longer owns anything here,
+ * so its flag is cleared with the same assignment that publishes the new page — before the list
+ * can react to it. Otherwise the list's one automatic request for the next page (a first page
+ * short enough to be fully visible) is rejected as a duplicate, and nothing re-issues it.
+ */
 function applyLoad(state: GraphState, byHash: Map<string, Commit>, result: { commits: Commit[]; refs: RefsSnapshot; count: number }, collapse: () => void): void {
 	const { commits, refs, count } = result;
+	state.loadingMore = false;
 	byHash.clear();
 	for (const c of commits) byHash.set(c.hash, c);
 	state.commits = commits;
@@ -135,6 +150,7 @@ export function createGraphStore(deps: GraphStoreDeps): GraphStore {
 		detailsError: null,
 		filterText: '',
 		historyPath: null,
+		historyFallbackPath: null,
 	});
 
 	const byHash = new Map<string, Commit>();
@@ -202,7 +218,9 @@ export function createGraphStore(deps: GraphStoreDeps): GraphStore {
 			if (gen !== generation || disposed) return;
 			state.error = errorMessage(e);
 		} finally {
-			state.loadingMore = false;
+			// A newer request owns the flag once this one is superseded; clearing it here would
+			// release a page load that is still in flight.
+			if (gen === generation) state.loadingMore = false;
 		}
 	}
 

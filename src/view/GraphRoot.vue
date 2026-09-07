@@ -8,7 +8,7 @@ import GraphHeader from './GraphHeader.vue';
 import type { RepoState } from './repoState';
 import { createGraphStore, type GraphStore } from './store';
 
-const props = defineProps<{ repoState: RepoState; settings: GitGraphSettings; changes: Emitter<void>; statusChanges: Emitter<void>; activeFile: string | null }>();
+const props = defineProps<{ repoState: RepoState; settings: GitGraphSettings; changes: Emitter<void>; statusChanges: Emitter<void>; activeFile: string | null; activeFileFallback?: string | null }>();
 const emit = defineEmits<{ updateSettings: [patch: Partial<GitGraphSettings>]; openFile: [path: string] }>();
 
 const store = shallowRef<GraphStore | null>(null);
@@ -40,8 +40,10 @@ watch(
 );
 
 // `store` is a source so a repository re-resolve re-applies history mode to the new store.
-watch([historyActive, () => props.activeFile, store], ([active, file, s]) => {
-	s?.setHistoryPath(active ? file : null);
+// The fallback is the pre-rename path of `activeFile`, which git may still be the only one to
+// know; it is a scope input like the file itself, so it is watched alongside it.
+watch([historyActive, () => props.activeFile, () => props.activeFileFallback ?? null, store], ([active, file, fallback, s]) => {
+	s?.setHistoryPath(active ? file : null, active ? fallback : null);
 });
 
 // Any settings change reloads: page size, ref filter and dirty row all affect what is fetched.

@@ -69,6 +69,27 @@ describe('createGraphStore history path', () => {
 		expect(store.state.error).toBe('fatal: bad revision');
 	});
 
+	// After Obsidian renames the open note, git only knows the old path until the rename is
+	// committed; the controller hands both down and the reader decides which one has history.
+	it('carries a fallback path into the log options and reloads when only the fallback changes', async () => {
+		const reader = new FakeReader();
+		reader.commits = linear(2);
+		const store = createGraphStore({ reader, settings: settings() });
+		await store.load();
+		store.setHistoryPath('b.md', 'a.md');
+		await flushPromises();
+		expect(reader.logCalls.at(-1)).toEqual({ skip: 0, count: 3, refs: 'auto', path: 'b.md', fallbackPath: 'a.md' });
+		const calls = reader.logCalls.length;
+		store.setHistoryPath('b.md', 'a.md');
+		await flushPromises();
+		expect(reader.logCalls).toHaveLength(calls);
+		// The rename is committed: same path, no fallback any more — still a scope change.
+		store.setHistoryPath('b.md');
+		await flushPromises();
+		expect(reader.logCalls).toHaveLength(calls + 1);
+		expect(reader.logCalls.at(-1)).not.toHaveProperty('fallbackPath');
+	});
+
 	it('drops a stale result when a history path change supersedes a pending one', async () => {
 		const reader = new FakeReader();
 		reader.deferLog = true;
@@ -82,4 +103,32 @@ describe('createGraphStore history path', () => {
 		expect(store.state.rows).toHaveLength(1);
 	});
 
+	// A superseded loadMore holds `loadingMore` until its own request settles. CommitList asks
+	// for the next page exactly once, when the fresh short page turns out to be fully visible;
+	// if the flag is still set then the store drops that request and nothing re-issues it, so
+	// the file history stays truncated with no scrollbar to pull the rest in.
+	it('clears loadingMore for the new scope and keeps the superseded request from clearing a newer one', async () => {
+		const reader = new FakeReader();
+		reader.commits = linear(7);
+		const store = createGraphStore({ reader, settings: settings() });
+		await store.load();
+		reader.deferLog = true;
+		const more = store.loadMore();
+		store.setHistoryPath('a.md');
+		reader.pendingLogs[1]?.(linear(3));
+		await flushPromises();
+		expect(store.state.loadingMore).toBe(false);
+		const calls = reader.logCalls.length;
+		const next = store.loadMore();
+		expect(reader.logCalls).toHaveLength(calls + 1);
+		expect(reader.logCalls.at(-1)).toMatchObject({ skip: 3, count: 3, path: 'a.md' });
+		reader.pendingLogs[0]?.(linear(2));
+		await more;
+		expect(store.state.loadingMore).toBe(true);
+		expect(store.state.rows).toHaveLength(3);
+		reader.pendingLogs[2]?.(linear(7).slice(3, 6));
+		await next;
+		expect(store.state.loadingMore).toBe(false);
+		expect(store.state.rows).toHaveLength(6);
+	});
 });

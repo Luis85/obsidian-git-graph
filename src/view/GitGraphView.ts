@@ -19,6 +19,11 @@ export interface ViewHost extends SettingsHost {
 	 * when the repository is not ready, and when the file lies outside the repository root.
 	 */
 	readonly activeFile: ShallowRef<string | null>;
+	/**
+	 * Repository-relative path `activeFile` had before Obsidian renamed it, while that rename is
+	 * still uncommitted — the only path git knows the file's history under. Null otherwise.
+	 */
+	readonly activeFileFallback: ShallowRef<string | null>;
 	viewOpened(): void;
 	viewClosed(): void;
 	openFile(path: string): void;
@@ -58,6 +63,7 @@ export class GitGraphView extends ItemView {
 					changes: host.changes,
 					statusChanges: host.statusChanges,
 					activeFile: host.activeFile.value,
+					activeFileFallback: host.activeFileFallback.value,
 					onUpdateSettings: (patch: Partial<GitGraphSettings>) => void host.updateSettings(patch),
 					onOpenFile: (path: string) => host.openFile(path),
 				}),

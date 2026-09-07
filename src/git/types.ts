@@ -48,8 +48,11 @@ export interface GitReader {
 	 * which for a vault nested inside a larger repository is a subdirectory of the root.
 	 * `GitRepository` anchors it with the `:(top,literal)` pathspec magic accordingly, which also
 	 * stops a name like `Meeting [2026].md` being read as a glob.
+	 *
+	 * `fallbackPath` is used when `path` has no history yet — an uncommitted rename — in which
+	 * case the history of this path is served instead.
 	 */
-	log(opts: { skip: number; count: number; refs: RefFilter; path?: string }): Promise<Commit[]>;
+	log(opts: { skip: number; count: number; refs: RefFilter; path?: string; fallbackPath?: string }): Promise<Commit[]>;
 	refs(): Promise<RefsSnapshot>;
 	status(): Promise<{ changed: number }>;
 	statusFiles(): Promise<ChangedFile[]>;

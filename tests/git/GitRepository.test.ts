@@ -162,6 +162,34 @@ describe('log with a path', () => {
 		expect(page.map((c) => c.hash)).toEqual([fixture.hashes.second]);
 	});
 
+	// Obsidian renames the open note before git knows anything about the new name: until the
+	// rename is committed no commit contains it, so `--follow` on the new path is empty. The
+	// fallback is the path git still knows, and it only stands in while the new one has nothing.
+	it('falls back to the pre-rename path while the rename is uncommitted', async () => {
+		const tmp = createEmptyRepo('git-graph-rename-');
+		try {
+			writeFileSync(join(tmp.dir, 'a.md'), 'a\n');
+			tmp.git('add', '.');
+			tmp.git('commit', '-q', '-m', 'Add a.md');
+			const added = tmp.git('rev-parse', 'HEAD');
+			tmp.git('mv', 'a.md', 'b.md');
+			const renamed = new GitRepository({ gitPath: 'git', cwd: tmp.dir });
+			expect(await renamed.log({ skip: 0, count: 10, refs: 'all', path: 'b.md' })).toEqual([]);
+			const viaFallback = await renamed.log({ skip: 0, count: 10, refs: 'all', path: 'b.md', fallbackPath: 'a.md' });
+			expect(viaFallback.map((c) => c.hash)).toEqual([added]);
+			// Once git knows the new path, it wins: the fallback is never consulted.
+			tmp.git('commit', '-q', '-m', 'Rename a.md to b.md');
+			const moved = tmp.git('rev-parse', 'HEAD');
+			writeFileSync(join(tmp.dir, 'b.md'), 'a\nmore\n');
+			tmp.git('commit', '-q', '-am', 'Edit b.md');
+			const edited = tmp.git('rev-parse', 'HEAD');
+			const commits = await renamed.log({ skip: 0, count: 10, refs: 'all', path: 'b.md', fallbackPath: 'a.md' });
+			expect(commits.map((c) => c.hash)).toEqual([edited, moved, added]);
+		} finally {
+			tmp.dispose();
+		}
+	});
+
 	it('omitting path still yields the full history', async () => {
 		const commits = await repo.log({ skip: 0, count: 200, refs: 'all' });
 		expect(commits).toHaveLength(5);

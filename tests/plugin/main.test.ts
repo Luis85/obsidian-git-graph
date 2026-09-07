@@ -349,6 +349,7 @@ describe('GitGraphPlugin', () => {
 			expect(plugin.activeFile.value).toBeNull();
 			app.workspace.trigger('file-open', { path: 'renamed.md' });
 			expect(plugin.activeFile.value).toBe('renamed.md');
+			expect(plugin.activeFileFallback.value).toBeNull();
 			// Obsidian fires file-open with null whenever a non-file leaf (the graph pane itself,
 			// when its history toggle is clicked) becomes active; the history must not reset.
 			app.workspace.trigger('file-open', null);
@@ -386,8 +387,17 @@ describe('GitGraphPlugin', () => {
 			// signal that `git log --follow` should switch to the new path.
 			app.vault.trigger('rename', { path: 'moved.md' }, 'renamed.md');
 			expect(plugin.activeFile.value).toBe('moved.md');
+			// git knows nothing about the new path until the rename is committed, so the path it
+			// still knows is kept as a fallback — and a chain of renames keeps the oldest one.
+			expect(plugin.activeFileFallback.value).toBe('renamed.md');
+			app.vault.trigger('rename', { path: 'again.md' }, 'moved.md');
+			expect(plugin.activeFile.value).toBe('again.md');
+			expect(plugin.activeFileFallback.value).toBe('renamed.md');
 			app.vault.trigger('rename', { path: 'b.md' }, 'a.md');
-			expect(plugin.activeFile.value).toBe('moved.md');
+			expect(plugin.activeFile.value).toBe('again.md');
+			// Another file's history has nothing to do with this rename chain.
+			app.workspace.trigger('file-open', { path: 'other.md' });
+			expect(plugin.activeFileFallback.value).toBeNull();
 			plugin.onunload();
 		});
 

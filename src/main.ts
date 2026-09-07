@@ -24,14 +24,24 @@ export default class GitGraphPlugin extends Plugin implements ViewHost {
 	readonly statusChanges = createEmitter<void>();
 	/** Repository-relative path of Obsidian's active file, or null while none is known. */
 	readonly activeFile = shallowRef<string | null>(null);
+	/** Repository-relative path `activeFile` was renamed away from while that rename is uncommitted, else null. */
+	readonly activeFileFallback = shallowRef<string | null>(null);
 
 	private watcher: GitWatcher | null = null;
 	/**
 	 * Vault-relative path of the last file Obsidian opened; survives null `file-open` events.
 	 * Renaming the active file (or a folder above it) does not re-fire `file-open`, so the
-	 * vault's `rename` event rewrites this path — see `onVaultRename`.
+	 * vault's `rename` event rewrites this path — see `onVaultRename`, which also keeps the
+	 * path it was rewritten away from in `fallbackVaultPath`.
 	 */
 	private activeVaultPath: string | null = null;
+	/**
+	 * Vault-relative path `activeVaultPath` held before the first rename of the open file, or
+	 * null once another file is opened. Until the rename is committed, no commit names the new
+	 * path, so this is the only path under which git can still find the file's history; a chain
+	 * a → b → c therefore keeps `a`, the last path git may know.
+	 */
+	private fallbackVaultPath: string | null = null;
 	private openViews = 0;
 	private initGeneration = 0;
 	// Runs in Obsidian's Electron renderer, so timers go through `window` per the
@@ -61,6 +71,8 @@ export default class GitGraphPlugin extends Plugin implements ViewHost {
 		this.registerEvent(
 			this.app.workspace.on('file-open', (file: TFile | null) => {
 				if (file === null) return;
+				// A different file starts a new history: the previous file's rename chain is over.
+				if (file.path !== this.activeVaultPath) this.fallbackVaultPath = null;
 				this.activeVaultPath = file.path;
 				this.resolveActiveFile();
 			}),
@@ -112,6 +124,9 @@ export default class GitGraphPlugin extends Plugin implements ViewHost {
 		if (current === oldPath) this.activeVaultPath = file.path;
 		else if (current.startsWith(`${oldPath}/`)) this.activeVaultPath = file.path + current.slice(oldPath.length);
 		else return;
+		// Only the first rename records a fallback: later ones move away from a path git has
+		// never seen either, so the oldest one stays the best guess at what git still knows.
+		this.fallbackVaultPath ??= current;
 		this.resolveActiveFile();
 	}
 
@@ -165,18 +180,18 @@ export default class GitGraphPlugin extends Plugin implements ViewHost {
 	}
 
 	/**
-	 * Recomputes `activeFile` from the last opened vault file. Null unless the repository is
-	 * ready, a file is known and it lives inside the repository root.
+	 * Recomputes `activeFile` and `activeFileFallback` from the tracked vault paths. Either is
+	 * null unless the repository is ready, that path is known and it lives inside the root.
 	 */
 	private resolveActiveFile(): void {
 		const state = this.repoState.value;
 		const adapter = this.app.vault.adapter;
-		const vaultPath = this.activeVaultPath;
-		if (state.kind !== 'ready' || vaultPath === null || !(adapter instanceof FileSystemAdapter)) {
-			this.activeFile.value = null;
-			return;
-		}
-		this.activeFile.value = relativeWithin(state.root, resolve(adapter.getBasePath(), vaultPath));
+		const toRepoPath = (vaultPath: string | null): string | null => {
+			if (state.kind !== 'ready' || vaultPath === null || !(adapter instanceof FileSystemAdapter)) return null;
+			return relativeWithin(state.root, resolve(adapter.getBasePath(), vaultPath));
+		};
+		this.activeFile.value = toRepoPath(this.activeVaultPath);
+		this.activeFileFallback.value = toRepoPath(this.fallbackVaultPath);
 	}
 
 	/** Resolves gitDir/commonDir and builds the watcher, bailing out (returning null) if a newer initRepo() has since started. */
