@@ -30,12 +30,17 @@ export class FakeReader implements GitReader {
 	pendingStatus: ((changed: number) => void)[] = [];
 	deferStatusFiles = false;
 	pendingStatusFiles: ((files: ChangedFile[]) => void)[] = [];
+	/** Repository-relative paths HEAD's tree contains, for `inHead`. */
+	headPaths = new Set<string>();
 
 	log(opts: { skip: number; count: number; refs: RefFilter; path?: string; fallbackPath?: string }): Promise<Commit[]> {
 		this.logCalls.push(opts);
 		if (this.failLog) return Promise.reject(this.failLog);
 		if (this.deferLog) return new Promise((resolve) => this.pendingLogs.push(resolve));
 		return Promise.resolve(this.commits.slice(opts.skip, opts.skip + opts.count));
+	}
+	inHead(path: string): Promise<boolean> {
+		return Promise.resolve(this.headPaths.has(path));
 	}
 	refs(): Promise<RefsSnapshot> {
 		return Promise.resolve(this.refsSnapshot);

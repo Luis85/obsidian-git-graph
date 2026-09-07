@@ -24,7 +24,11 @@ export default class GitGraphPlugin extends Plugin implements ViewHost {
 	readonly statusChanges = createEmitter<void>();
 	/** Repository-relative path of Obsidian's active file, or null while none is known. */
 	readonly activeFile = shallowRef<string | null>(null);
-	/** Repository-relative paths `activeFile` was renamed away from, newest first, while those renames are uncommitted. */
+	/**
+	 * Repository-relative paths `activeFile` was renamed away from, newest first. Only a path
+	 * HEAD held when the rename happened is listed, and it is retired again once it leaves HEAD
+	 * — see `previousVaultPaths` and `retireCommittedRenames`.
+	 */
 	readonly activeFileFallbacks = shallowRef<readonly string[]>([]);
 
 	private watcher: GitWatcher | null = null;
@@ -41,8 +45,14 @@ export default class GitGraphPlugin extends Plugin implements ViewHost {
 	 * the path it produced, so these are the paths under which git may still find the file's
 	 * history. A chain a → b → c keeps `b` then `a`: if the a → b rename was committed and
 	 * b edited before c happened, only `b` reaches those commits, so it is tried first.
+	 *
+	 * Only a path HEAD contained at the moment of the rename gets in — a name no commit ever
+	 * had can hold no history — and `retireCommittedRenames` cuts a path back out once it has
+	 * left HEAD, because from then on `--follow` walks to it from the current name anyway.
 	 */
 	private previousVaultPaths: string[] = [];
+	/** Bumped whenever the tracked history is dropped (another file opened, or unload), to void pending `inHead` checks. */
+	private historyGeneration = 0;
 	private openViews = 0;
 	private initGeneration = 0;
 	// Runs in Obsidian's Electron renderer, so timers go through `window` per the
@@ -66,6 +76,9 @@ export default class GitGraphPlugin extends Plugin implements ViewHost {
 		this.addCommand({ id: 'refresh', name: 'Refresh', callback: () => this.refresh() });
 		this.addSettingTab(new GitGraphSettingTab(this.app, this));
 		this.registerVaultWatchers();
+		// The watcher emits `changes` on every commit, which is exactly when an earlier path of
+		// the open file may have stopped being a name only the plugin knows.
+		this.changes.on(() => void this.retireCommittedRenames());
 		// Obsidian fires `file-open` with null whenever a non-file leaf becomes active — the graph
 		// pane itself does that when its history toggle is clicked — so null events are ignored and
 		// the history keeps showing the file that is still open in the editor.
@@ -73,7 +86,10 @@ export default class GitGraphPlugin extends Plugin implements ViewHost {
 			this.app.workspace.on('file-open', (file: TFile | null) => {
 				if (file === null) return;
 				// A different file starts a new history: the previous file's rename chain is over.
-				if (file.path !== this.activeVaultPath) this.previousVaultPaths = [];
+				if (file.path !== this.activeVaultPath) {
+					this.historyGeneration++;
+					this.previousVaultPaths = [];
+				}
 				this.activeVaultPath = file.path;
 				this.resolveActiveFile();
 			}),
@@ -88,6 +104,7 @@ export default class GitGraphPlugin extends Plugin implements ViewHost {
 
 	onunload(): void {
 		this.initGeneration++;
+		this.historyGeneration++;
 		this.watcher?.dispose();
 		this.watcher = null;
 		if (this.reinitTimer !== null) {
@@ -109,7 +126,7 @@ export default class GitGraphPlugin extends Plugin implements ViewHost {
 		this.registerEvent(
 			this.app.vault.on('rename', (file, oldPath) => {
 				onVaultEdit();
-				this.onVaultRename(file, oldPath);
+				void this.onVaultRename(file, oldPath);
 			}),
 		);
 	}
@@ -118,17 +135,56 @@ export default class GitGraphPlugin extends Plugin implements ViewHost {
 	 * Keeps the active path pointing at the file Obsidian still has open across a rename of that
 	 * file or of a folder above it. Without this the header and `git log --follow -- <old path>`
 	 * would stay on the pre-rename path and miss every commit made under the new one.
+	 *
+	 * The path left behind is recorded only when HEAD holds it: it is then a name commits may
+	 * sit under, and which of the recorded names is the right one to ask depends on where in the
+	 * chain the last commit fell. The middle of an uncommitted a → b → c chain fails that test —
+	 * no commit ever named `b` — so it is dropped rather than asked for a history it cannot have.
 	 */
-	private onVaultRename(file: TAbstractFile, oldPath: string): void {
+	private async onVaultRename(file: TAbstractFile, oldPath: string): Promise<void> {
 		const current = this.activeVaultPath;
 		if (current === null) return;
 		if (current === oldPath) this.activeVaultPath = file.path;
 		else if (current.startsWith(`${oldPath}/`)) this.activeVaultPath = file.path + current.slice(oldPath.length);
 		else return;
-		// Every rename records the path it left behind: any of them may be the one git knows the
-		// history under, depending on where in the chain the last commit fell. A new array each
-		// time, so the shallowRef this feeds (and the prop watcher behind it) sees the change.
+		// The header follows the new name at once; the HEAD lookup below only decides whether the
+		// old one is worth remembering, so it must not hold that up.
+		this.resolveActiveFile();
+		const state = this.repoState.value;
+		const repoPath = this.toRepoPath(current);
+		if (state.kind !== 'ready' || repoPath === null) return;
+		const generation = this.historyGeneration;
+		if (!(await state.reader.inHead(repoPath))) return;
+		// Unloaded, or moved on to another file, while git was answering.
+		if (generation !== this.historyGeneration) return;
+		// A new array, so the shallowRef this feeds (and the prop watcher behind it) sees the change.
 		this.previousVaultPaths = [current, ...this.previousVaultPaths];
+		this.resolveActiveFile();
+	}
+
+	/**
+	 * Cuts every earlier path from the first one HEAD no longer holds, the older ones with it. A
+	 * path leaves HEAD only when the rename that produced it has been committed, and from that
+	 * commit on `git log --follow` from the current name reaches it — and everything before it —
+	 * unaided, so keeping it only risks matching a stranger that later takes the name over. The
+	 * cut is one-way for that reason: a name re-added afterwards is no longer on the list.
+	 */
+	private async retireCommittedRenames(): Promise<void> {
+		const paths = this.previousVaultPaths;
+		const state = this.repoState.value;
+		if (paths.length === 0 || state.kind !== 'ready') return;
+		const generation = this.historyGeneration;
+		let keep = 0;
+		while (keep < paths.length) {
+			const repoPath = this.toRepoPath(paths[keep] ?? null);
+			// Sequential on purpose: the first path that has left HEAD ends the list, so the
+			// older ones behind it never have to be asked about at all.
+			if (repoPath === null || !(await state.reader.inHead(repoPath))) break;
+			keep++;
+		}
+		// Unloaded, or the list dropped or extended, while git was answering.
+		if (generation !== this.historyGeneration || this.previousVaultPaths !== paths || keep === paths.length) return;
+		this.previousVaultPaths = paths.slice(0, keep);
 		this.resolveActiveFile();
 	}
 
@@ -171,6 +227,8 @@ export default class GitGraphPlugin extends Plugin implements ViewHost {
 			this.repoState.value = { kind: 'ready', root, reader };
 			// A file opened before the repository resolved is only convertible now.
 			this.resolveActiveFile();
+			// Commits made before this repository resolved count as seen too.
+			await this.retireCommittedRenames();
 		} catch (e) {
 			if (gen !== this.initGeneration) return;
 			if (e instanceof GitError && e.code === 'ENOENT') {
@@ -187,14 +245,16 @@ export default class GitGraphPlugin extends Plugin implements ViewHost {
 	 * fallbacks keep their order and drop whatever does not convert.
 	 */
 	private resolveActiveFile(): void {
+		this.activeFile.value = this.toRepoPath(this.activeVaultPath);
+		this.activeFileFallbacks.value = this.previousVaultPaths.map((p) => this.toRepoPath(p)).filter((p): p is string => p !== null);
+	}
+
+	/** A vault-relative path as git names it, or null while the repository is unready or the path falls outside its root. */
+	private toRepoPath(vaultPath: string | null): string | null {
 		const state = this.repoState.value;
 		const adapter = this.app.vault.adapter;
-		const toRepoPath = (vaultPath: string | null): string | null => {
-			if (state.kind !== 'ready' || vaultPath === null || !(adapter instanceof FileSystemAdapter)) return null;
-			return relativeWithin(state.root, resolve(adapter.getBasePath(), vaultPath));
-		};
-		this.activeFile.value = toRepoPath(this.activeVaultPath);
-		this.activeFileFallbacks.value = this.previousVaultPaths.map((p) => toRepoPath(p)).filter((p): p is string => p !== null);
+		if (state.kind !== 'ready' || vaultPath === null || !(adapter instanceof FileSystemAdapter)) return null;
+		return relativeWithin(state.root, resolve(adapter.getBasePath(), vaultPath));
 	}
 
 	/** Resolves gitDir/commonDir and builds the watcher, bailing out (returning null) if a newer initRepo() has since started. */
@@ -244,6 +304,8 @@ export default class GitGraphPlugin extends Plugin implements ViewHost {
 	viewOpened(): void {
 		this.openViews++;
 		if (this.openViews === 1) this.watcher?.resume();
+		// The watcher was paused while no view was open, so a commit may have gone unseen.
+		void this.retireCommittedRenames();
 	}
 
 	viewClosed(): void {

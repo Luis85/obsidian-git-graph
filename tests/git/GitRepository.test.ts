@@ -438,3 +438,25 @@ describe('commitDetails', () => {
 		expect(details.files).toEqual([{ path: 'note.md', status: 'A' }]);
 	});
 });
+
+// What the plugin asks to decide whether an earlier path of the open note is still worth
+// remembering: once a rename is committed the source has left HEAD and `--follow` reaches it
+// from the current name on its own.
+describe('inHead', () => {
+	it('reports whether HEAD contains a repository-relative path', async () => {
+		expect(await repo.inHead('renamed.md')).toBe(true);
+		// The tip commit renamed note.md away, so HEAD no longer has it.
+		expect(await repo.inHead('note.md')).toBe(false);
+		expect(await repo.inHead('never-existed.md')).toBe(false);
+	});
+
+	it('is false for every path in a repository with no commits', async () => {
+		const empty = createEmptyRepo('git-graph-in-head-');
+		try {
+			const emptyRepo = new GitRepository({ gitPath: 'git', cwd: empty.dir });
+			expect(await emptyRepo.inHead('note.md')).toBe(false);
+		} finally {
+			empty.dispose();
+		}
+	});
+});

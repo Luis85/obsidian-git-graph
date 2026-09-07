@@ -55,6 +55,12 @@ export interface GitReader {
 	 * cannot stand in for the open note; otherwise the first path with any history is served.
 	 */
 	log(opts: { skip: number; count: number; refs: RefFilter; path?: string; fallbackPaths?: readonly string[] }): Promise<Commit[]>;
+	/**
+	 * True when HEAD's tree contains this repository-relative path. The plugin asks before it
+	 * remembers an earlier path of the open note (a name no commit ever had is useless as a
+	 * fallback) and again after every commit, to retire a path whose rename has since landed.
+	 */
+	inHead(path: string): Promise<boolean>;
 	refs(): Promise<RefsSnapshot>;
 	status(): Promise<{ changed: number }>;
 	statusFiles(): Promise<ChangedFile[]>;

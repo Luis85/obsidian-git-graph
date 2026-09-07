@@ -91,6 +91,11 @@ export class GitRepository implements GitReader {
 	 * The newest such path is where the note's commits live, so it is asked first. Once a rename
 	 * is committed its source has left HEAD, and `path` is asked first again; an earlier name a
 	 * new, unrelated file has since taken over is present in the working tree and so never counts.
+	 *
+	 * The test cannot tell a real uncommitted rename from an earlier path a stranger has since
+	 * re-added and deleted, which looks exactly the same. Retiring is therefore the plugin's job:
+	 * it drops an earlier path as soon as that path leaves HEAD, on every commit it sees, so a
+	 * stale one only reaches here in the window between a commit and the next `changes` event.
 	 */
 	private async logFollowing(selection: string[], skip: number, count: number, path: string, fallbackPaths: readonly string[]): Promise<Commit[]> {
 		const identity = await this.newestRenamedAway(fallbackPaths);
@@ -101,6 +106,16 @@ export class GitRepository implements GitReader {
 			if (commits.length > 0) return commits.slice(skip);
 		}
 		return [];
+	}
+
+	/**
+	 * True when HEAD's tree contains `path`. `<rev>:<path>` is resolved from the repository root
+	 * (only a `./` or `../` prefix would make it relative to cwd) and is never glob-expanded, so
+	 * no pathspec magic is needed here; `cat-file -e` exits non-zero for a path HEAD lacks and
+	 * for a repository whose HEAD does not resolve at all.
+	 */
+	async inHead(path: string): Promise<boolean> {
+		return (await this.tryRun(['cat-file', '-e', `HEAD:${path}`])) !== null;
 	}
 
 	/**

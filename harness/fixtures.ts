@@ -429,6 +429,8 @@ export function createScenarioReader(name: string): GitReader {
 			const commits = path === undefined ? f.commits : f.commits.filter((c) => detailsFor(c).files.some((file) => file.path === path));
 			return Promise.resolve(commits.slice(skip, skip + count));
 		},
+		// The harness has no working tree behind it, so no earlier path is ever worth keeping.
+		inHead: () => Promise.resolve(false),
 		refs: () => Promise.resolve(snapshot),
 		status: () => Promise.resolve({ changed: f.changed }),
 		statusFiles: () => Promise.resolve([...(f.dirtyFiles ?? [])]),
