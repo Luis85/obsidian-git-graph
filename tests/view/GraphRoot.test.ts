@@ -182,6 +182,26 @@ describe('GraphRoot', () => {
 		expect(w.find('svg.git-graph-lanes').exists()).toBe(true);
 	});
 
+	it('narrows the file history further with the text filter, client-side', async () => {
+		const reader = new FakeReader();
+		reader.commits = [commit('c1', 'c2', 'Alpha edit'), commit('c2', null, 'Beta edit')];
+		const w = mountRoot({ kind: 'ready', root: 'C:/vault', reader }, undefined, undefined, 'notes/a.md');
+		await flushPromises();
+		await w.get('button.git-graph-history-toggle').trigger('click');
+		await flushPromises();
+		expect(reader.logCalls.at(-1)).toMatchObject({ path: 'notes/a.md' });
+		expect(w.findAll('.git-graph-row')).toHaveLength(2);
+		const calls = reader.logCalls.length;
+		await w.get('input.git-graph-filter').setValue('alpha');
+		await flushPromises();
+		// Filtering is a view-level narrowing of the rows already loaded: no new log call, and
+		// the path is still the one history mode set.
+		expect(reader.logCalls).toHaveLength(calls);
+		expect(w.findAll('.git-graph-row')).toHaveLength(1);
+		expect(w.text()).toContain('Alpha edit');
+		expect(w.text()).not.toContain('Beta edit');
+	});
+
 	it('keeps the history mode when the repository re-resolves', async () => {
 		const reader = new FakeReader();
 		reader.commits = linear(1);

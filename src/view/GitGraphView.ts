@@ -14,7 +14,10 @@ export interface ViewHost extends SettingsHost {
 	readonly settingsRef: ShallowRef<GitGraphSettings>;
 	readonly changes: Emitter<void>;
 	readonly statusChanges: Emitter<void>;
-	/** Repository-relative path of Obsidian's active file, or null when none is open. */
+	/**
+	 * Repository-relative path of Obsidian's active file. Null when no file has been opened yet,
+	 * when the repository is not ready, and when the file lies outside the repository root.
+	 */
 	readonly activeFile: ShallowRef<string | null>;
 	viewOpened(): void;
 	viewClosed(): void;

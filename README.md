@@ -45,7 +45,9 @@ while the pane is open; a git-state change still refreshes the whole graph. When
 is a folder inside a larger repository, the row counts only files under the vault. The
 history icon in the pane header narrows the list to just the commits that touched the file
 open in the active editor, as a flat list with the graph lanes hidden; switching the active
-file re-filters it, and clicking the icon again returns to the full graph.
+file re-filters it, and clicking the icon again returns to the full graph. File history obeys
+the **Refs to show** setting like the rest of the pane, so on Auto a commit that touched the
+file on an unmerged branch is not listed until you switch to All.
 
 ## Settings
 

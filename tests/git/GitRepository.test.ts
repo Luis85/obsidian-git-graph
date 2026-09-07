@@ -166,6 +166,38 @@ describe('log with a path', () => {
 		const commits = await repo.log({ skip: 0, count: 200, refs: 'all' });
 		expect(commits).toHaveLength(5);
 	});
+
+	// The path is repository-relative, but git resolves a bare pathspec against cwd. For a vault
+	// nested inside a larger repository the two differ, so the pathspec has to be anchored to the
+	// repository root or the history comes back empty.
+	it('resolves the path against the repository root, not cwd, when cwd is a subdirectory', async () => {
+		const sub = join(fixture.dir, 'sub');
+		mkdirSync(sub, { recursive: true });
+		const subRepo = new GitRepository({ gitPath: 'git', cwd: sub });
+		const commits = await subRepo.log({ skip: 0, count: 200, refs: 'all', path: 'renamed.md' });
+		expect(commits.map((c) => c.hash)).toEqual([fixture.hashes.tip, fixture.hashes.second, fixture.hashes.root]);
+	});
+
+	// A note named `Meeting [2026].md` is a character class unless the pathspec says `literal`:
+	// `[2026]` also matches the `2` of the sibling below, so its commits leak into the history.
+	it('treats glob metacharacters in the path literally', async () => {
+		const tmp = createEmptyRepo('git-graph-glob-');
+		try {
+			mkdirSync(join(tmp.dir, 'notes'));
+			writeFileSync(join(tmp.dir, 'notes', 'Meeting [2026].md'), 'meeting\n');
+			writeFileSync(join(tmp.dir, 'notes', 'Meeting 2.md'), 'sibling\n');
+			tmp.git('add', '.');
+			tmp.git('commit', '-q', '-m', 'Add both notes');
+			const both = tmp.git('rev-parse', 'HEAD');
+			writeFileSync(join(tmp.dir, 'notes', 'Meeting 2.md'), 'sibling edited\n');
+			tmp.git('commit', '-q', '-am', 'Edit only the sibling');
+			const bracketed = new GitRepository({ gitPath: 'git', cwd: tmp.dir });
+			const commits = await bracketed.log({ skip: 0, count: 200, refs: 'all', path: 'notes/Meeting [2026].md' });
+			expect(commits.map((c) => c.hash)).toEqual([both]);
+		} finally {
+			tmp.dispose();
+		}
+	});
 });
 
 describe('refs', () => {

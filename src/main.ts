@@ -6,7 +6,7 @@ import { GitRepository } from './git/GitRepository';
 import { GitGraphSettingTab } from './settings/GitGraphSettingTab';
 import { DEFAULT_SETTINGS, normalizeSettings, type GitGraphSettings } from './settings/types';
 import { createEmitter } from './util/emitter';
-import { realPath, relativeWithin } from './util/paths';
+import { relativeWithin } from './util/paths';
 import { GIT_GRAPH_ICON, GIT_GRAPH_VIEW, GitGraphView, type ViewHost } from './view/GitGraphView';
 import type { RepoState } from './view/repoState';
 import { createGitWatcher, type GitWatcher } from './watch/gitWatcher';
@@ -26,7 +26,11 @@ export default class GitGraphPlugin extends Plugin implements ViewHost {
 	readonly activeFile = shallowRef<string | null>(null);
 
 	private watcher: GitWatcher | null = null;
-	/** Vault-relative path of the last file Obsidian opened; survives null `file-open` events. */
+	/**
+	 * Vault-relative path of the last file Obsidian opened; survives null `file-open` events.
+	 * Renaming the active file does not re-fire `file-open`, so this stays the pre-rename path
+	 * until another file is opened — `git log --follow` still reports that file's history.
+	 */
 	private activeVaultPath: string | null = null;
 	private openViews = 0;
 	private initGeneration = 0;
@@ -63,7 +67,8 @@ export default class GitGraphPlugin extends Plugin implements ViewHost {
 		);
 
 		this.app.workspace.onLayoutReady(() => {
-			this.activeVaultPath = this.app.workspace.getActiveFile()?.path ?? null;
+			// Same policy as the `file-open` handler: the seed may set a path, never clear one.
+			this.activeVaultPath = this.app.workspace.getActiveFile()?.path ?? this.activeVaultPath;
 			void this.initRepo();
 		});
 	}
@@ -211,14 +216,14 @@ export default class GitGraphPlugin extends Plugin implements ViewHost {
 
 	/**
 	 * Opens a repository-relative path in the current leaf when it lives inside this vault.
-	 * Both the vault base path and the repository root are canonicalized first, so a vault
-	 * opened through a symlink or junction resolves to the same directory git reports.
+	 * `relativeWithin` canonicalizes both the vault base path and the resolved target, so a
+	 * vault opened through a symlink or junction resolves to the same directory git reports.
 	 */
 	openFile(path: string): void {
 		const state = this.repoState.value;
 		const adapter = this.app.vault.adapter;
 		if (state.kind !== 'ready' || !(adapter instanceof FileSystemAdapter)) return;
-		const vaultRelative = relativeWithin(adapter.getBasePath(), resolve(realPath(state.root), path));
+		const vaultRelative = relativeWithin(adapter.getBasePath(), resolve(state.root, path));
 		if (vaultRelative === null) {
 			void new Notice(`Git graph: ${path} is outside this vault.`);
 			return;

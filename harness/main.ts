@@ -58,7 +58,8 @@ function buildRepoState(): RepoState {
 }
 
 const settings = shallowRef(buildSettings());
-const activeFile = shallowRef<string | null>(params.get('file'));
+// `||` not `??`: `?file=` is an empty label, not an open file — it must not turn history mode on.
+const activeFile = shallowRef<string | null>(params.get('file') || null);
 const changes = createEmitter<void>();
 const statusChanges = createEmitter<void>();
 const repoState = buildRepoState();

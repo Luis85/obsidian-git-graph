@@ -42,6 +42,13 @@ export interface CommitDetails {
 }
 
 export interface GitReader {
+	/**
+	 * `path`, when given, narrows the log to one file's history (renames followed). It is
+	 * repository-relative with forward slashes — not relative to the reader's working directory,
+	 * which for a vault nested inside a larger repository is a subdirectory of the root.
+	 * `GitRepository` anchors it with the `:(top,literal)` pathspec magic accordingly, which also
+	 * stops a name like `Meeting [2026].md` being read as a glob.
+	 */
 	log(opts: { skip: number; count: number; refs: RefFilter; path?: string }): Promise<Commit[]>;
 	refs(): Promise<RefsSnapshot>;
 	status(): Promise<{ changed: number }>;

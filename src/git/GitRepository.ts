@@ -67,9 +67,15 @@ export class GitRepository implements GitReader {
 	 * commits at all — in every option order, with or without --topo-order (verified against git
 	 * 2.48.1). So a path query is bounded with `--max-count=skip+count` only, and the skip is
 	 * applied to the parsed result instead of to git.
+	 *
+	 * `path` is repository-relative but `cwd` is the vault, which for a vault nested inside a
+	 * larger repository is not the repository root — a bare pathspec, resolved against cwd, would
+	 * then name a file that does not exist and the history would always be empty. `:(top,…)`
+	 * (pathspec magic, git >= 1.9) anchors it to the root instead, and `literal` disables glob
+	 * interpretation so a note like `Meeting [2026].md` is not read as a character class.
 	 */
 	private async logFollowing(selection: string[], skip: number, count: number, path: string): Promise<Commit[]> {
-		const out = await this.run(['log', '--topo-order', '-z', `--format=${LOG_FORMAT}`, `--max-count=${skip + count}`, ...selection, '--follow', '--', path]);
+		const out = await this.run(['log', '--topo-order', '-z', `--format=${LOG_FORMAT}`, `--max-count=${skip + count}`, ...selection, '--follow', '--', `:(top,literal)${path}`]);
 		return parseLog(out).slice(skip);
 	}
 
