@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, shallowRef, watch } from 'vue';
+import { computed, onBeforeUnmount, ref, shallowRef, watch } from 'vue';
 import type { RefFilter } from '../git/types';
 import type { GitGraphSettings } from '../settings/types';
 import type { Emitter } from '../util/emitter';
@@ -8,10 +8,11 @@ import GraphHeader from './GraphHeader.vue';
 import type { RepoState } from './repoState';
 import { createGraphStore, type GraphStore } from './store';
 
-const props = defineProps<{ repoState: RepoState; settings: GitGraphSettings; changes: Emitter<void>; statusChanges: Emitter<void> }>();
+const props = defineProps<{ repoState: RepoState; settings: GitGraphSettings; changes: Emitter<void>; statusChanges: Emitter<void>; activeFile: string | null }>();
 const emit = defineEmits<{ updateSettings: [patch: Partial<GitGraphSettings>]; openFile: [path: string] }>();
 
 const store = shallowRef<GraphStore | null>(null);
+const historyActive = ref(false);
 let unsubscribeChanges: (() => void) | null = null;
 let unsubscribeStatus: (() => void) | null = null;
 
@@ -38,6 +39,11 @@ watch(
 	{ immediate: true },
 );
 
+// `store` is a source so a repository re-resolve re-applies history mode to the new store.
+watch([historyActive, () => props.activeFile, store], ([active, file, s]) => {
+	s?.setHistoryPath(active ? file : null);
+});
+
 // Any settings change reloads: page size, ref filter and dirty row all affect what is fetched.
 watch(
 	() => props.settings,
@@ -50,12 +56,24 @@ const repoName = computed(() => (props.repoState.kind === 'ready' ? props.repoSt
 
 const dirty = computed(() => {
 	const s = store.value;
+	if (historyActive.value) return null;
 	if (!s || !props.settings.showDirtyRow || s.state.dirtyCount === 0) return null;
 	const head = s.state.rows.find((r) => r.hash === s.state.headHash);
-	return { count: s.state.dirtyCount, laneCount: head?.laneCount ?? s.state.rows[0]?.laneCount ?? 1, headLane: head?.lane ?? 0, color: head?.color ?? 0 };
+	// HEAD sizes the row when it is loaded; otherwise the newest loaded row stands in for it.
+	return { count: s.state.dirtyCount, laneCount: (head ?? s.state.rows[0])?.laneCount ?? 1, headLane: head?.lane ?? 0, color: head?.color ?? 0 };
 });
 
-const showGraph = computed(() => (store.value?.state.filterText.trim().length ?? 0) === 0);
+// A single file's history is a straight line: lanes carry no information, so they are hidden.
+const showGraph = computed(() => !historyActive.value && (store.value?.state.filterText.trim().length ?? 0) === 0);
+
+/** The empty message history mode owns, or null to leave the regular loading/empty/list chain alone. */
+const historyEmpty = computed<string | null>(() => {
+	if (!historyActive.value) return null;
+	if (props.activeFile === null) return 'Open a file to see its history.';
+	const s = store.value;
+	if (s === null || s.state.loading || s.state.rows.length > 0 || s.state.error !== null) return null;
+	return 'No commits for this file yet.';
+});
 
 function onRefFilter(value: RefFilter): void {
 	emit('updateSettings', { refFilter: value });
@@ -95,9 +113,12 @@ function onRefFilter(value: RefFilter): void {
         :ref-filter="settings.refFilter"
         :filter-text="store.state.filterText"
         :loading="store.state.loading"
+        :history-active="historyActive"
+        :history-file="activeFile"
         @refresh="store.load()"
         @update:ref-filter="onRefFilter"
         @update:filter-text="store.setFilter($event)"
+        @update:history-active="historyActive = $event"
       />
       <div
         v-if="store.state.error !== null || store.state.statusError !== null"
@@ -113,8 +134,16 @@ function onRefFilter(value: RefFilter): void {
           Retry
         </button>
       </div>
+      <!-- History mode owns the empty state whenever it has one: with no file open there is
+           nothing to load, and an empty file history is not an empty repository. -->
       <div
-        v-if="store.state.loading && store.state.rows.length === 0"
+        v-if="historyEmpty !== null"
+        class="git-graph-empty"
+      >
+        {{ historyEmpty }}
+      </div>
+      <div
+        v-else-if="store.state.loading && store.state.rows.length === 0"
         class="git-graph-empty"
       >
         Loading history…

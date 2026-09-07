@@ -27,6 +27,18 @@
 	content: '·';
 	margin-right: var(--size-4-1);
 }
+.git-graph-history-file {
+	color: var(--text-muted);
+	font-weight: var(--font-normal);
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+.git-graph-history-file::before {
+	content: '·';
+	margin-right: var(--size-4-1);
+}
 .git-graph-tools {
 	display: flex;
 	align-items: center;
@@ -40,4 +52,7 @@
 	flex: 1 1 auto;
 	min-width: 0;
 	font-size: var(--font-ui-smaller);
+}
+.git-graph-history-toggle.is-active {
+	color: var(--text-accent);
 }

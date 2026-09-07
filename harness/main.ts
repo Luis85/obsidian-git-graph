@@ -100,6 +100,8 @@ createApp({
 			settings: settings.value,
 			changes,
 			statusChanges,
+			// TODO(task 4/5): the harness has no Obsidian workspace; a fixture active file lands with the plugin wiring.
+			activeFile: null,
 			onUpdateSettings: (patch: Partial<GitGraphSettings>) => {
 				settings.value = { ...settings.value, ...patch };
 			},

@@ -52,6 +52,8 @@ export class GitGraphView extends ItemView {
 					settings: host.settingsRef.value,
 					changes: host.changes,
 					statusChanges: host.statusChanges,
+					// TODO(task 4): the plugin starts tracking the workspace's active file next.
+					activeFile: null,
 					onUpdateSettings: (patch: Partial<GitGraphSettings>) => void host.updateSettings(patch),
 					onOpenFile: (path: string) => host.openFile(path),
 				}),

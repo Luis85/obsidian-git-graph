@@ -6,8 +6,8 @@ import { createEmitter } from '../../src/util/emitter';
 import type { RepoState } from '../../src/view/repoState';
 import { FakeReader, commit, linear } from '../helpers/fakeReader';
 
-const mountRoot = (repoState: RepoState, changes = createEmitter<void>(), statusChanges = createEmitter<void>()) =>
-	mount(GraphRoot, { props: { repoState, settings: { ...DEFAULT_SETTINGS, pageSize: 10 }, changes, statusChanges } });
+const mountRoot = (repoState: RepoState, changes = createEmitter<void>(), statusChanges = createEmitter<void>(), activeFile: string | null = null) =>
+	mount(GraphRoot, { props: { repoState, settings: { ...DEFAULT_SETTINGS, pageSize: 10 }, changes, statusChanges, activeFile } });
 
 describe('GraphRoot', () => {
 	it('renders the non-repo, missing-git, error and unresolved states', () => {
@@ -153,6 +153,63 @@ describe('GraphRoot', () => {
 		expect(w.findAll('.git-graph-dirty-details .git-graph-file')).toHaveLength(2);
 		await w.findAll('.git-graph-dirty-details .git-graph-file-link')[1]?.trigger('click');
 		expect(w.emitted('openFile')).toEqual([['notes/b.md']]);
+	});
+
+	it('follows the active file while the history toggle is on, and restores the graph when it is off', async () => {
+		const reader = new FakeReader();
+		reader.commits = linear(2);
+		reader.changed = 2;
+		const w = mountRoot({ kind: 'ready', root: 'C:/vault', reader }, undefined, undefined, 'notes/a.md');
+		await flushPromises();
+		expect(reader.logCalls.at(-1)?.path).toBeUndefined();
+		await w.get('button.git-graph-history-toggle').trigger('click');
+		await flushPromises();
+		expect(reader.logCalls.at(-1)).toMatchObject({ path: 'notes/a.md' });
+		expect(w.findAll('.git-graph-row:not(.git-graph-row-dirty)')).toHaveLength(2);
+		expect(w.find('svg.git-graph-lanes').exists()).toBe(false);
+		expect(w.find('.git-graph-row-dirty').exists()).toBe(false);
+		const calls = reader.logCalls.length;
+		await w.setProps({ activeFile: 'notes/b.md' });
+		await flushPromises();
+		expect(reader.logCalls).toHaveLength(calls + 1);
+		expect(reader.logCalls.at(-1)).toMatchObject({ path: 'notes/b.md' });
+		await w.setProps({ activeFile: 'notes/b.md' });
+		await flushPromises();
+		expect(reader.logCalls).toHaveLength(calls + 1);
+		await w.get('button.git-graph-history-toggle').trigger('click');
+		await flushPromises();
+		expect(reader.logCalls.at(-1)?.path).toBeUndefined();
+		expect(w.find('svg.git-graph-lanes').exists()).toBe(true);
+	});
+
+	it('keeps the history mode when the repository re-resolves', async () => {
+		const reader = new FakeReader();
+		reader.commits = linear(1);
+		const w = mountRoot({ kind: 'ready', root: 'C:/vault', reader }, undefined, undefined, 'notes/a.md');
+		await flushPromises();
+		await w.get('button.git-graph-history-toggle').trigger('click');
+		await flushPromises();
+		await w.setProps({ repoState: { kind: 'ready', root: 'C:/vault', reader } });
+		await flushPromises();
+		expect(reader.logCalls.at(-1)).toMatchObject({ path: 'notes/a.md' });
+	});
+
+	it('asks for a file when history is on with none open, and reports an empty file history', async () => {
+		const reader = new FakeReader();
+		reader.commits = linear(2);
+		const w = mountRoot({ kind: 'ready', root: 'C:/vault', reader });
+		await flushPromises();
+		await w.get('button.git-graph-history-toggle').trigger('click');
+		await flushPromises();
+		expect(w.text()).toContain('Open a file to see its history.');
+		expect(w.findAll('.git-graph-row')).toHaveLength(0);
+		expect(reader.logCalls.every((c) => c.path === undefined)).toBe(true);
+
+		reader.commits = [];
+		await w.setProps({ activeFile: 'notes/a.md' });
+		await flushPromises();
+		expect(w.text()).toContain('No commits for this file yet.');
+		expect(w.text()).not.toContain('No commits yet.');
 	});
 
 	it('re-emits openFile from the expanded commit', async () => {

@@ -1,9 +1,14 @@
 <script setup lang="ts">
+import { computed } from 'vue';
 import type { RefFilter } from '../git/types';
 import Icon from './Icon.vue';
 
-defineProps<{ repoName: string; branch: string | null; refFilter: RefFilter; filterText: string; loading: boolean }>();
-const emit = defineEmits<{ refresh: []; 'update:refFilter': [value: RefFilter]; 'update:filterText': [value: string] }>();
+const props = defineProps<{ repoName: string; branch: string | null; refFilter: RefFilter; filterText: string; loading: boolean; historyActive: boolean; historyFile: string | null }>();
+const emit = defineEmits<{ refresh: []; 'update:refFilter': [value: RefFilter]; 'update:filterText': [value: string]; 'update:historyActive': [value: boolean] }>();
+
+// The title row swaps the branch for the file only when history mode actually has a file to follow.
+const showHistoryFile = computed(() => props.historyActive && props.historyFile !== null);
+const historyName = computed(() => props.historyFile?.split('/').pop() ?? '');
 
 function onFilter(e: Event): void {
 	emit('update:refFilter', (e.target as HTMLSelectElement).value === 'all' ? 'all' : 'auto');
@@ -21,7 +26,15 @@ function onText(e: Event): void {
     >
       <Icon name="git-graph" />
       <span class="git-graph-repo">{{ repoName }}</span>
-      <span class="git-graph-branch">{{ branch ?? 'detached' }}</span>
+      <span
+        v-if="showHistoryFile"
+        class="git-graph-history-file"
+        :title="historyFile ?? ''"
+      >{{ historyName }}</span>
+      <span
+        v-else
+        class="git-graph-branch"
+      >{{ branch ?? 'detached' }}</span>
     </div>
     <div class="git-graph-tools">
       <select
@@ -52,6 +65,16 @@ function onText(e: Event): void {
         @click="emit('refresh')"
       >
         <Icon name="refresh-cw" />
+      </button>
+      <button
+        type="button"
+        class="git-graph-history-toggle clickable-icon"
+        :class="{ 'is-active': historyActive }"
+        aria-label="Show history of the active file"
+        :aria-pressed="historyActive"
+        @click="emit('update:historyActive', !historyActive)"
+      >
+        <Icon name="file-clock" />
       </button>
     </div>
   </div>
