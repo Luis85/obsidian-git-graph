@@ -341,6 +341,7 @@ const FIXTURES: Record<string, () => Fixture> = {
 	long,
 	dirty: () => ({ ...merge('dirty', 3), dirtyFiles: DIRTY_FILES }),
 	empty,
+	'empty-dirty': () => ({ ...empty(), changed: 2, dirtyFiles: DIRTY_FILES.slice(0, 2) }),
 	error: () => ({ ...linear('error'), failLogAfterFirst: true }),
 	slow: () => merge('slow', 0, 1500),
 };
@@ -354,6 +355,7 @@ export const SCENARIOS: readonly Scenario[] = [
 	{ name: 'long', description: `${LONG_COUNT} commits, so scrolling to the bottom pages in more.` },
 	{ name: 'dirty', description: 'The merge history plus three uncommitted working tree changes; the changes row expands.' },
 	{ name: 'empty', description: 'A repository with no commits yet.' },
+	{ name: 'empty-dirty', description: 'No commits yet, but two uncommitted files: only the changes row shows.' },
 	{ name: 'error', description: 'The first load succeeds, every later one fails: banner over kept rows.', refreshAfterLoad: true },
 	{ name: 'slow', description: 'Commit details take 1.5 s to resolve, for the details loading state.' },
 	{ name: 'none', description: 'The vault is not inside a git repository.', state: 'none' },

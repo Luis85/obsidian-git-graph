@@ -119,9 +119,10 @@ function onRefFilter(value: RefFilter): void {
       >
         Loading history…
       </div>
-      <!-- An error banner (load or status) replaces the empty message; Retry brings it back. -->
+      <!-- An error banner (load or status) replaces the empty message; Retry brings it back.
+           A repository with changes but no commits yet still mounts the list for its changes row. -->
       <div
-        v-else-if="!store.state.loading && store.state.rows.length === 0 && store.state.error === null && store.state.statusError === null"
+        v-else-if="!store.state.loading && store.state.rows.length === 0 && dirty === null && store.state.error === null && store.state.statusError === null"
         class="git-graph-empty"
       >
         No commits yet.

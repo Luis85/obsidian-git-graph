@@ -25,6 +25,7 @@ See [RELEASING.md](RELEASING.md) for how this file is kept in step with a releas
 - With "Refs to show" on Auto, a stale `origin/HEAD` (the remote's default branch renamed or pruned) no longer makes the whole graph fail with "bad revision".
 - A file whose name begins with two dots (such as `..notes.md`) now opens from the commit and changes lists instead of being reported as outside the vault.
 - For a vault that is a folder inside a larger repository, the changes row now counts and lists only files under the vault, so it no longer goes stale on edits the pane cannot see.
+- A repository with uncommitted files but no commits yet shows the changes row instead of only "No commits yet".
 
 ## [0.2.0] - 2026-09-07
 

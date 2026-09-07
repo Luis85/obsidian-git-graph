@@ -33,6 +33,13 @@ test('dirty adds a working tree row above the commits', async ({ page }) => {
 	await expect(page.locator('.git-graph-row')).toHaveCount(9);
 });
 
+test('empty-dirty shows the changes row and no commit rows', async ({ page }) => {
+	await open(page, 'scenario=empty-dirty');
+	await expect(page.locator('.git-graph-row-dirty')).toHaveCount(1);
+	await expect(page.locator('.git-graph-row:not(.git-graph-row-dirty)')).toHaveCount(0);
+	await expect(page.locator('.git-graph-empty')).toHaveCount(0);
+});
+
 test('dirty expands the changes row into the working tree files', async ({ page }) => {
 	await open(page, 'scenario=dirty');
 	await expect(page.locator('.git-graph-dirty-details')).toHaveCount(0);
