@@ -57,9 +57,12 @@ http://localhost:5174/?scenario=dirty&filter=Fix
 | `merge` | A feature branch merged back into `main` — 8 commits, two lanes. |
 | `octopus` | A three-parent octopus merge. |
 | `branches` | Four open lanes, remotes and tags, with HEAD below the first row. |
+| `stacked` | Nested feature merges: the left lane stays with the tip, side lanes slide in as lines end. |
+| `page-end-merge` | The page ends on a three-parent merge whose parents are not loaded: three lines leave the bottom. |
 | `long` | 600 commits, so scrolling to the bottom pages in more (`log` honours skip/count). |
 | `dirty` | The `merge` history plus three uncommitted working tree changes (one of them deleted); the changes row expands into their file list. |
 | `empty` | A repository with no commits yet. |
+| `empty-dirty` | No commits yet, but two uncommitted files: only the changes row shows. |
 | `error` | The first load succeeds, every later one fails: the error banner over kept rows. |
 | `slow` | Commit details take 1.5 s to resolve, for the details loading state. |
 | `none` | `RepoState { kind: 'none' }` — the vault is not inside a git repository. |
@@ -128,6 +131,7 @@ some other server, for example a `harness:build` preview.
 3. For a non-repository state, set `state: 'none' | 'no-git' | 'unresolved'` on the `SCENARIOS`
    entry instead and skip the fixture — `harness/main.ts` maps those straight to a `RepoState`.
 4. Add a case to `harness/harness.spec.ts` if the scenario is meant to pin a behavior.
+5. Add a row to the scenario table above.
 
 ## Caveats
 

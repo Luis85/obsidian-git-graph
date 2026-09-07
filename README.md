@@ -25,11 +25,12 @@ external programs. This one does both, for exactly these purposes, and nothing e
   `child_process.execFile` — never through a shell — to read the repository: `rev-parse`,
   `log`, `for-each-ref`, `status`, `show`, `diff-tree`, `symbolic-ref`. No command writes to
   the repository or the working tree; the plugin has no commit, checkout, fetch or push.
-- **Reads the repository's `.git` directory** with `fs.watch` so the pane refreshes when a
-  commit, branch or checkout happens. For a vault that is a folder inside a larger
-  repository, that directory sits outside the vault. The plugin never writes there.
-- **Resolves real paths** (`fs.realpathSync`) of the vault folder and the repository root so
-  a vault opened through a symlink or junction matches the paths git reports.
+- **Reads the repository's `.git` directory** with `fs.existsSync` and `fs.watch` so the
+  pane refreshes when a commit, branch or checkout happens. For a vault that is a folder
+  inside a larger repository, that directory sits outside the vault. The plugin never
+  writes there.
+- **Resolves real paths** (`fs.realpathSync.native`) of the vault folder and the repository
+  root so a vault opened through a symlink or junction matches the paths git reports.
 
 Files are opened in the editor through Obsidian's vault API only. The plugin makes no
 network requests and collects no telemetry.

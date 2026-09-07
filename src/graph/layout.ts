@@ -146,6 +146,12 @@ function followChain(g: Graph, startAt: number): void {
 	g.colorEnds[color] = end;
 }
 
+// Invariant that keeps the fallback below from ever colliding with a claimed column: every
+// member of `bottomColumns` is less than `last.nextX`. A preferred column already in
+// `bottomColumns` was claimed through `registerPoint`, which only accepts a column equal to
+// the current `nextX` and then bumps it past that column; and every column this function
+// allocates as a fallback bumps `last.nextX` itself. So `last.nextX` always exceeds every
+// column recorded so far, and handing out `last.nextX` next can never repeat one.
 function offBottomColumn(g: Graph, preferred: number): number {
 	const last = g.vertices[g.vertices.length - 1] as Vertex;
 	let x = preferred;

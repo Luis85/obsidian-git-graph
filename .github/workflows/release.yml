@@ -63,8 +63,11 @@ jobs:
       # starting on the branch, so a plain check would refuse the documented path every
       # time. Every check run named `verify*`, plus the one named `audit`, must have
       # concluded successfully; a group that hasn't reported yet is treated as pending
-      # until the deadline below. The fatal verdicts are "missing" and "failed" — renaming
-      # either CI job means updating this guard in the same edit.
+      # until the deadline below. A failed conclusion is checked before either group's
+      # presence, so a leg that fails fast is reported as "failed" even while the other
+      # group is still queued, rather than masked as "pending" until the deadline. The
+      # fatal verdicts are "missing" and "failed" — renaming either CI job means updating
+      # this guard in the same edit.
       - name: Require a green CI run on this commit
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -85,12 +88,12 @@ jobs:
           while :; do
             verdict="$(gh api "repos/$GITHUB_REPOSITORY/commits/$GITHUB_SHA/check-runs" \
               --jq '[.check_runs[] | select((.name | startswith("verify")) or .name == "audit")]
-                    | if length == 0 then "missing"
+                    | if any(.conclusion != null and .conclusion != "success") then "failed"
+                      elif length == 0 then "missing"
                       elif ([.[] | select(.name | startswith("verify"))] | length) == 0 then "pending"
                       elif ([.[] | select(.name == "audit")] | length) == 0 then "pending"
                       elif any(.status != "completed") then "pending"
-                      elif all(.conclusion == "success") then "success"
-                      else "failed" end')"
+                      else "success" end')"
             case "$verdict" in
               success) break ;;
               failed)

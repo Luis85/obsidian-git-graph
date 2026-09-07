@@ -165,6 +165,13 @@ test('octopus renders a merge node with three parents', async ({ page }) => {
 	await expect(page.locator('.git-graph-row').first()).toContainText('Merge');
 });
 
+test('page-end-merge fans the last row into three separate lines off the bottom', async ({ page }) => {
+	await open(page, 'scenario=page-end-merge');
+	const lastRow = page.locator('.git-graph-row').last();
+	await expect(lastRow).toContainText('Merge');
+	await expect(lastRow.locator('.git-graph-lanes path')).toHaveCount(3);
+});
+
 test('expand opens a commit from the URL and dateFormat switches the date column', async ({ page }) => {
 	await open(page, 'scenario=merge&expand=Initial+commit&dateFormat=absolute');
 	await expect(page.locator('.git-graph-details')).toBeVisible();

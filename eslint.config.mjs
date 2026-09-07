@@ -9,7 +9,8 @@ import oxlint from 'eslint-plugin-oxlint';
 
 const SRC = ['src/**/*.ts', 'src/**/*.vue'];
 // The harness is application-shaped but not plugin code: it lints on the same tier as
-// tests and root tooling, never with obsidianmd's plugin-guideline rules.
+// tests and root tooling, plus only the two obsidianmd rules the community-plugin scan
+// reports on it (see the harness entry below).
 const TESTS = ['tests/**/*.ts', 'harness/**/*.ts'];
 const tsconfigRootDir = fileURLToPath(new URL('.', import.meta.url));
 // obsidianmd's recommended config pulls in typescript-eslint's type-checked rules for
