@@ -128,6 +128,23 @@ describe('layoutGraph', () => {
 		expect(rows[1]?.laneCount).toBe(2);
 	});
 
+	it('fans out the parents of a merge that ends the page, one off-bottom column each', () => {
+		const [row] = layoutGraph([c('M', 'A', 'B')]);
+		expect(row?.segments).toEqual([seg('out', 0, 0, 0), seg('out', 0, 1, 1)]);
+		expect(row?.laneCount).toBe(2);
+		const [octopus] = layoutGraph([c('O', 'A', 'B', 'C')]);
+		expect(octopus?.segments).toEqual([seg('out', 0, 0, 0), seg('out', 0, 1, 1), seg('out', 0, 2, 2)]);
+		expect(octopus?.laneCount).toBe(3);
+	});
+
+	it('keeps a page-ending merge from colliding with a line already passing its row', () => {
+		// X's line to R passes M's row in lane 0 and leaves off the bottom there; M sits in lane 1,
+		// so its own off-page parents take lanes 1 and 2 rather than doubling up on lane 1.
+		const rows = layoutGraph([c('X', 'R'), c('M', 'P', 'Q')]);
+		expect(rows[1]?.segments).toEqual([seg('pass', 0, 0, 0), seg('out', 1, 1, 1), seg('out', 1, 2, 2)]);
+		expect(rows[1]?.laneCount).toBe(3);
+	});
+
 	it('lays out the feature branch the way VS Code Git Graph does', () => {
 		// The tip's first-parent chain owns lane 0 all the way down …
 		for (const hash of ['3c1c737a', '33c98588', '9cc669cd', '2b1749fc', '273f3617', 'b78d150f']) expect(laneOf(featureBranch, hash), hash).toBe(0);
@@ -155,18 +172,21 @@ describe('layoutGraph', () => {
 		expect(rows.map((r) => r.lane)).toEqual([0, 0]);
 	});
 
-	it('never emits two segments with the same kind and lanes in one row (LaneCell keys on that triple)', () => {
+	it('never emits two segments with the same kind and lanes in one row (LaneCell keys on kind, lanes and color)', () => {
 		const histories = [
 			[c('A', 'B'), c('B', 'C'), c('C')],
 			[c('M', 'A', 'B'), c('A', 'R'), c('B', 'R'), c('R')],
 			[c('M', 'A', 'B', 'C'), c('A'), c('B'), c('C')],
 			[c('A', 'B'), c('B'), c('C')],
 			[c('X', 'P'), c('Y', 'P'), c('P')],
+			[c('M', 'A', 'B')],
+			[c('O', 'A', 'B', 'C')],
+			[c('X', 'R'), c('M', 'P', 'Q')],
 			featureBranch,
 		];
 		for (const history of histories) {
 			for (const row of layoutGraph(history)) {
-				const keys = row.segments.map((s) => `${s.kind}:${s.fromLane}:${s.toLane}`);
+				const keys = row.segments.map((s) => `${s.kind}:${s.fromLane}:${s.toLane}:${s.color}`);
 				expect(new Set(keys).size).toBe(keys.length);
 			}
 		}

@@ -37,6 +37,8 @@ interface Graph {
 	branchColors: number[];
 	/** Per color: the last row a path of that color touched, or Infinity while one is still running. */
 	colorEnds: number[];
+	/** Columns already carrying a line off the bottom of the last row. */
+	bottomColumns: Set<number>;
 }
 
 function buildVertices(commits: readonly Commit[]): Vertex[] {
@@ -132,16 +134,31 @@ function followChain(g: Graph, startAt: number): void {
 		parent = wasPlaced ? null : nextParent(cur);
 	}
 	// The parent is outside the loaded commits (or, with a malformed order, above its child):
-	// the line runs off the bottom of the last row, and the parent counts as handled.
+	// the line runs off the bottom of the last row, and the parent counts as handled. A line that
+	// crossed rows below its start already owns a unique column there; one that starts on the
+	// last row would otherwise leave at the commit's own column for every parent, so each after
+	// the first takes the next free column instead.
 	if (parent !== null) {
 		v.nextParent++;
-		g.lines.push({ row: g.vertices.length - 1, x1: lastX, x2: lastX, color });
+		const x2 = offBottomColumn(g, lastX);
+		g.lines.push({ row: g.vertices.length - 1, x1: lastX, x2, color });
 	}
 	g.colorEnds[color] = end;
 }
 
+function offBottomColumn(g: Graph, preferred: number): number {
+	const last = g.vertices[g.vertices.length - 1] as Vertex;
+	let x = preferred;
+	if (g.bottomColumns.has(x)) {
+		x = last.nextX;
+		last.nextX = x + 1;
+	}
+	g.bottomColumns.add(x);
+	return x;
+}
+
 function tracePaths(commits: readonly Commit[]): Graph {
-	const g: Graph = { vertices: buildVertices(commits), lines: [], branchColors: [], colorEnds: [] };
+	const g: Graph = { vertices: buildVertices(commits), lines: [], branchColors: [], colorEnds: [], bottomColumns: new Set() };
 	let i = 0;
 	while (i < g.vertices.length) {
 		const v = g.vertices[i] as Vertex;
