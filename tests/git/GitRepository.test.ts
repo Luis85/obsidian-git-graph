@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, realpathSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -250,6 +250,32 @@ describe('log with a path', () => {
 			const moved = tmp.git('rev-parse', 'HEAD');
 			const settled = await reused.log({ skip: 0, count: 10, refs: 'all', path: 'b.md', fallbackPaths: ['a.md'] });
 			expect(settled.map((c) => c.hash)).toEqual([moved, added]);
+		} finally {
+			tmp.dispose();
+		}
+	});
+
+	// The stranger may still be in HEAD: deleted only in the working tree, with the open note
+	// renamed onto its name in the same uncommitted sweep. Git cannot see a rename there at all
+	// (b.md merely changed content), so the earlier path Obsidian reported is the only evidence —
+	// and while HEAD still contains that earlier path, it is the note's committed identity.
+	it('prefers the rename source when the destination name is still tracked in HEAD', async () => {
+		const tmp = createEmptyRepo('git-graph-tracked-name-');
+		try {
+			writeFileSync(join(tmp.dir, 'b.md'), 'stranger\n');
+			writeFileSync(join(tmp.dir, 'a.md'), 'a\n');
+			tmp.git('add', '.');
+			tmp.git('commit', '-q', '-m', 'Add a.md and an unrelated b.md');
+			const both = tmp.git('rev-parse', 'HEAD');
+			writeFileSync(join(tmp.dir, 'a.md'), 'a\nmore\n');
+			tmp.git('commit', '-q', '-am', 'Edit a.md');
+			const edited = tmp.git('rev-parse', 'HEAD');
+			// Obsidian's rename is a plain filesystem rename; no git command is involved.
+			rmSync(join(tmp.dir, 'b.md'));
+			renameSync(join(tmp.dir, 'a.md'), join(tmp.dir, 'b.md'));
+			const repoAfter = new GitRepository({ gitPath: 'git', cwd: tmp.dir });
+			const pending = await repoAfter.log({ skip: 0, count: 10, refs: 'all', path: 'b.md', fallbackPaths: ['a.md'] });
+			expect(pending.map((c) => c.hash)).toEqual([edited, both]);
 		} finally {
 			tmp.dispose();
 		}

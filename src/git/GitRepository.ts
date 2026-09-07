@@ -83,15 +83,17 @@ export class GitRepository implements GitReader {
 	 * does not depend on which page is being fetched — a path with any history at all wins, even
 	 * when this page of it happens to be past its last commit.
 	 *
-	 * While the rename is uncommitted, `path` itself goes last: HEAD does not contain it, so any
-	 * history `--follow` finds under that name belongs to some earlier, since-deleted file that
-	 * happened to have it — not to the open note. Once HEAD names `path` (the rename committed,
-	 * or the file never renamed) its history is the complete one and it is asked first.
+	 * Which name is the note's committed identity cannot be read off `path` alone: history found
+	 * under it may belong to a since-deleted stranger that had the same name, whether that
+	 * stranger is gone from HEAD or only from the working tree (in which case git sees no rename
+	 * at all, just a changed `b.md`). The earlier paths are the evidence: the newest one HEAD
+	 * still contains is where the note's commits live, so it is asked first. Once a rename is
+	 * committed its source has left HEAD, and `path` is asked first again.
 	 */
 	private async logFollowing(selection: string[], skip: number, count: number, path: string, fallbackPaths: readonly string[]): Promise<Commit[]> {
-		const pathFirst = fallbackPaths.length === 0 || (await this.inHead(path));
-		const candidates = pathFirst ? [path, ...fallbackPaths] : [...fallbackPaths, path];
-		for (const candidate of candidates) {
+		const identity = await this.newestInHead(fallbackPaths);
+		const ordered = identity === null ? [path, ...fallbackPaths] : [identity, path, ...fallbackPaths.filter((p) => p !== identity)];
+		for (const candidate of ordered) {
 			// Sequential on purpose: each path is only queried because the previous one was empty.
 			const commits = await this.runFollow(selection, skip + count, candidate);
 			if (commits.length > 0) return commits.slice(skip);
@@ -99,9 +101,13 @@ export class GitRepository implements GitReader {
 		return [];
 	}
 
-	/** True when HEAD's tree contains `path` (repository-relative; `<rev>:<path>` is always root-relative). */
-	private async inHead(path: string): Promise<boolean> {
-		return (await this.tryRun(['cat-file', '-e', `HEAD:${path}`])) !== null;
+	/** The first of `paths` that HEAD's tree contains (repository-relative; `<rev>:<path>` is always root-relative), or null. */
+	private async newestInHead(paths: readonly string[]): Promise<string | null> {
+		for (const path of paths) {
+			// Sequential on purpose: the newest path is the answer, later ones are only asked if it is absent.
+			if ((await this.tryRun(['cat-file', '-e', `HEAD:${path}`])) !== null) return path;
+		}
+		return null;
 	}
 
 	private async runFollow(selection: string[], max: number, path: string): Promise<Commit[]> {
