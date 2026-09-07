@@ -20,6 +20,9 @@ See [RELEASING.md](RELEASING.md) for how this file is kept in step with a releas
 
 ## [Unreleased]
 
+### Fixed
+- The release workflow now also waits for CI's `npm audit` job before publishing, instead of publishing as soon as the build and test runs are green.
+
 ## [0.2.0] - 2026-09-07
 
 ### Changed

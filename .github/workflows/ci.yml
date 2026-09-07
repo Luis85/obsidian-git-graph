@@ -7,9 +7,9 @@ on:
 
 jobs:
   # Named `verify` on purpose: release.yml refuses to publish a commit unless every check
-  # run whose name starts with `verify` concluded successfully on it. Renaming this job
-  # means updating that guard in the same edit, or the release workflow refuses everything
-  # with "no verify runs found".
+  # run whose name starts with `verify`, plus the one named `audit` below, concluded
+  # successfully on it. Renaming either job means updating that guard in the same edit,
+  # or the release workflow refuses everything with "missing".
   verify:
     # Both platforms, because a green Ubuntu run says nothing about the two things that
     # differ and that this plugin actually touches: path separators and line endings. The
@@ -61,6 +61,8 @@ jobs:
   # One platform, because an advisory is a fact about the dependency tree and the lockfile
   # is the same on both. `--omit=dev` scopes it to what actually reaches a vault: this
   # plugin ships one runtime dependency (vue), and everything else is build-time only.
+  #
+  # release.yml waits on this job by its exact name, `audit`, alongside the `verify` runs.
   audit:
     runs-on: ubuntu-latest
     steps:

@@ -83,8 +83,9 @@ jobs:
           deadline=$(( SECONDS + 900 ))
           while :; do
             verdict="$(gh api "repos/$GITHUB_REPOSITORY/commits/$GITHUB_SHA/check-runs" \
-              --jq '[.check_runs[] | select(.name | startswith("verify"))]
+              --jq '[.check_runs[] | select((.name | startswith("verify")) or .name == "audit")]
                     | if length == 0 then "missing"
+                      elif ([.[] | select(.name == "audit")] | length) == 0 then "pending"
                       elif any(.status != "completed") then "pending"
                       elif all(.conclusion == "success") then "success"
                       else "failed" end')"
@@ -98,7 +99,7 @@ jobs:
                 if [ "$SECONDS" -ge "$deadline" ]; then
                   echo "Gave up waiting for CI on $GITHUB_SHA (last seen: $verdict)." >&2
                   echo "'pending' means CI was still running — re-run this workflow once it finishes." >&2
-                  echo "'missing' means no job named 'verify' reported at all; if CI's job was renamed, this guard needs the new name." >&2
+                  echo "'missing' means no job named 'verify' or 'audit' reported at all; if CI's jobs were renamed, this guard needs the new names." >&2
                   exit 1
                 fi
                 sleep 20
