@@ -61,9 +61,10 @@ jobs:
       # It WAITS rather than merely checking, because `git push --follow-tags` pushes the
       # branch and the tag together: this workflow starts on the tag while CI is still
       # starting on the branch, so a plain check would refuse the documented path every
-      # time. Every outcome other than success is fatal, including "no verify runs found"
-      # — CI names that job `verify`, and if it is ever renamed this guard must be updated
-      # rather than silently passing everything.
+      # time. Every check run named `verify*`, plus the one named `audit`, must have
+      # concluded successfully; a group that hasn't reported yet is treated as pending
+      # until the deadline below. The fatal verdicts are "missing" and "failed" — renaming
+      # either CI job means updating this guard in the same edit.
       - name: Require a green CI run on this commit
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -85,6 +86,7 @@ jobs:
             verdict="$(gh api "repos/$GITHUB_REPOSITORY/commits/$GITHUB_SHA/check-runs" \
               --jq '[.check_runs[] | select((.name | startswith("verify")) or .name == "audit")]
                     | if length == 0 then "missing"
+                      elif ([.[] | select(.name | startswith("verify"))] | length) == 0 then "pending"
                       elif ([.[] | select(.name == "audit")] | length) == 0 then "pending"
                       elif any(.status != "completed") then "pending"
                       elif all(.conclusion == "success") then "success"
