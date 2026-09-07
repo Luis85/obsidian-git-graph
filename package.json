@@ -1,6 +1,6 @@
 {
   "name": "obsidian-git-graph",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "VS Code's source control graph as an Obsidian side pane.",
   "type": "module",
   "scripts": {
