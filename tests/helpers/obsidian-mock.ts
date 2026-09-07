@@ -44,14 +44,15 @@ type Listener = (...args: never[]) => void;
 export class App {
 	vault = {
 		adapter: new FileSystemAdapter('C:/fake-vault') as unknown,
-		handlers: {} as Record<string, (() => void)[]>,
+		handlers: {} as Record<string, Listener[]>,
 		files: new Map<string, { path: string }>(),
-		on(name: string, cb: () => void): EventRef {
+		on(name: string, cb: Listener): EventRef {
 			(this.handlers[name] ??= []).push(cb);
 			return { name, cb };
 		},
-		trigger(name: string): void {
-			for (const cb of this.handlers[name] ?? []) cb();
+		// `rename` hands its listeners (file, oldPath), so the arguments have to reach them.
+		trigger(name: string, ...args: unknown[]): void {
+			for (const cb of this.handlers[name] ?? []) (cb as (...a: unknown[]) => void)(...args);
 		},
 		getFileByPath(path: string): { path: string } | null {
 			return this.files.get(path) ?? null;

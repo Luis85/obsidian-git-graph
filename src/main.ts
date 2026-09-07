@@ -1,4 +1,4 @@
-import { FileSystemAdapter, Notice, Plugin, type TFile } from 'obsidian';
+import { FileSystemAdapter, Notice, Plugin, type TAbstractFile, type TFile } from 'obsidian';
 import { resolve } from 'node:path';
 import { shallowRef } from 'vue';
 import { GitError } from './git/GitError';
@@ -28,8 +28,8 @@ export default class GitGraphPlugin extends Plugin implements ViewHost {
 	private watcher: GitWatcher | null = null;
 	/**
 	 * Vault-relative path of the last file Obsidian opened; survives null `file-open` events.
-	 * Renaming the active file does not re-fire `file-open`, so this stays the pre-rename path
-	 * until another file is opened — `git log --follow` still reports that file's history.
+	 * Renaming the active file (or a folder above it) does not re-fire `file-open`, so the
+	 * vault's `rename` event rewrites this path — see `onVaultRename`.
 	 */
 	private activeVaultPath: string | null = null;
 	private openViews = 0;
@@ -93,7 +93,26 @@ export default class GitGraphPlugin extends Plugin implements ViewHost {
 		this.registerEvent(this.app.vault.on('modify', onVaultEdit));
 		this.registerEvent(this.app.vault.on('create', onVaultEdit));
 		this.registerEvent(this.app.vault.on('delete', onVaultEdit));
-		this.registerEvent(this.app.vault.on('rename', onVaultEdit));
+		this.registerEvent(
+			this.app.vault.on('rename', (file, oldPath) => {
+				onVaultEdit();
+				this.onVaultRename(file, oldPath);
+			}),
+		);
+	}
+
+	/**
+	 * Keeps the active path pointing at the file Obsidian still has open across a rename of that
+	 * file or of a folder above it. Without this the header and `git log --follow -- <old path>`
+	 * would stay on the pre-rename path and miss every commit made under the new one.
+	 */
+	private onVaultRename(file: TAbstractFile, oldPath: string): void {
+		const current = this.activeVaultPath;
+		if (current === null) return;
+		if (current === oldPath) this.activeVaultPath = file.path;
+		else if (current.startsWith(`${oldPath}/`)) this.activeVaultPath = file.path + current.slice(oldPath.length);
+		else return;
+		this.resolveActiveFile();
 	}
 
 	/** Debounces vault edits into a single `statusChanges` emit, only while a view is open and the repo is ready. */

@@ -376,6 +376,38 @@ describe('GitGraphPlugin', () => {
 			plugin.onunload();
 		});
 
+		it('follows a rename of the active file and ignores renames of other files', async () => {
+			const plugin = makePlugin(fixture.dir);
+			await plugin.onload();
+			await plugin.initRepo();
+			const app = plugin.app as unknown as App;
+			app.workspace.trigger('file-open', { path: 'renamed.md' });
+			// Obsidian does not re-fire file-open on a rename, so the vault event is the only
+			// signal that `git log --follow` should switch to the new path.
+			app.vault.trigger('rename', { path: 'moved.md' }, 'renamed.md');
+			expect(plugin.activeFile.value).toBe('moved.md');
+			app.vault.trigger('rename', { path: 'b.md' }, 'a.md');
+			expect(plugin.activeFile.value).toBe('moved.md');
+			plugin.onunload();
+		});
+
+		it('rewrites the active file under a renamed parent folder, and ignores a rename with no file open', async () => {
+			const plugin = makePlugin(fixture.dir);
+			await plugin.onload();
+			await plugin.initRepo();
+			const app = plugin.app as unknown as App;
+			app.vault.trigger('rename', { path: 'archive' }, 'notes');
+			expect(plugin.activeFile.value).toBeNull();
+			app.workspace.trigger('file-open', { path: 'notes/a.md' });
+			app.vault.trigger('rename', { path: 'archive' }, 'notes');
+			expect(plugin.activeFile.value).toBe('archive/a.md');
+			// A path that merely starts with the old one ("archive/a" vs "archive/a.md") is a
+			// different file, not a parent folder.
+			app.vault.trigger('rename', { path: 'x' }, 'archive/a');
+			expect(plugin.activeFile.value).toBe('archive/a.md');
+			plugin.onunload();
+		});
+
 		it('reports a sub-vault file relative to the repository root', async () => {
 			// As with the sub-vault openFile test, the vault base here is a subfolder of the fixture.
 			const sub = join(fixture.dir, 'sub');

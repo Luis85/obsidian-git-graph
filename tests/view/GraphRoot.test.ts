@@ -202,6 +202,22 @@ describe('GraphRoot', () => {
 		expect(w.text()).not.toContain('Beta edit');
 	});
 
+	it('shows the loading message, not the graph rows, while the file history is still loading', async () => {
+		const reader = new FakeReader();
+		reader.commits = linear(3);
+		const w = mountRoot({ kind: 'ready', root: 'C:/vault', reader }, undefined, undefined, 'notes/a.md');
+		await flushPromises();
+		expect(w.findAll('.git-graph-row:not(.git-graph-row-dirty)')).toHaveLength(3);
+		reader.deferLog = true;
+		await w.get('button.git-graph-history-toggle').trigger('click');
+		await flushPromises();
+		expect(w.text()).toContain('Loading history…');
+		expect(w.findAll('.git-graph-row')).toHaveLength(0);
+		reader.pendingLogs.at(-1)?.(linear(1));
+		await flushPromises();
+		expect(w.findAll('.git-graph-row')).toHaveLength(1);
+	});
+
 	it('keeps the history mode when the repository re-resolves', async () => {
 		const reader = new FakeReader();
 		reader.commits = linear(1);

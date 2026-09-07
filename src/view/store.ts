@@ -80,12 +80,19 @@ function logOptions(state: GraphState, refFilter: RefFilter, skip: number, count
 	return { skip, count, refs: refFilter, path: state.historyPath };
 }
 
-/** Builds `setHistoryPath`: switches the path filter, resets pagination to one page, collapses any expansion, and reloads. */
-function createHistoryPathSetter(state: GraphState, collapse: () => void, load: () => Promise<void>): (path: string | null) => void {
+/** Builds `setHistoryPath`: switches the path filter, drops the rows of the old scope, resets pagination to one page, collapses any expansion, and reloads. */
+function createHistoryPathSetter(state: GraphState, byHash: Map<string, Commit>, collapse: () => void, load: () => Promise<void>): (path: string | null) => void {
 	return function setHistoryPath(path: string | null): void {
 		if (state.historyPath === path) return;
 		state.historyPath = path;
 		state.loadedCount = 0;
+		// The loaded commits belong to the previous scope. Clearing them here (rather than
+		// waiting for the new log) keeps another file's history from showing under this file's
+		// name — and, when the request fails, from sitting under the error banner indefinitely.
+		byHash.clear();
+		state.commits = [];
+		state.rows = [];
+		state.hasMore = false;
 		collapse();
 		void load();
 	};
@@ -200,7 +207,7 @@ export function createGraphStore(deps: GraphStoreDeps): GraphStore {
 	}
 
 	const toggleExpand = createExpandToggler(deps, state, () => disposed, collapse);
-	const setHistoryPath = createHistoryPathSetter(state, collapse, load);
+	const setHistoryPath = createHistoryPathSetter(state, byHash, collapse, load);
 
 	return {
 		state,
