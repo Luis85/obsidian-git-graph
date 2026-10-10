@@ -4,7 +4,7 @@ import { layoutGraph } from '../graph/layout';
 import type { Row } from '../graph/types';
 import type { GitGraphSettings } from '../settings/types';
 import { errorMessage } from './errors';
-import { collapseExpansion, createExpandToggler, createStepper, INITIAL_EXPANSION, type ExpansionState } from './expansion';
+import { createExpansion, createStepper, INITIAL_EXPANSION, type ExpansionState } from './expansion';
 import { createStatusSync, type StatusState } from './statusSync';
 
 export interface GraphStoreDeps {
@@ -24,6 +24,8 @@ export interface GraphState extends StatusState, ExpansionState {
 	loadedCount: number;
 	hasMore: boolean;
 	filterText: string;
+	/** The file whose history is shown; null for the whole repository. */
+	historyPath: string | null;
 	historyFallbackPaths: readonly string[];
 }
 
@@ -32,11 +34,15 @@ export interface GraphStore {
 	readonly visibleRows: ComputedRef<Row[]>;
 	commitOf(hash: string): Commit | undefined;
 	load(): Promise<void>;
+	/** Loads the next page; a call while one is in flight resolves with that page. */
 	loadMore(): Promise<void>;
 	refreshStatus(): Promise<void>;
 	toggleExpand(hash: string): Promise<void>;
-	/** Expands the shown commit `step` rows from `fromHash`: +1 is older, -1 newer. */
-	expandAdjacent(fromHash: string, step: 1 | -1): Promise<void>;
+	/**
+	 * Expands the shown commit `step` rows from `fromHash` (+1 is older, -1 newer) and resolves
+	 * whether the expansion moved. Its details and diff follow once stepping pauses.
+	 */
+	expandAdjacent(fromHash: string, step: 1 | -1): Promise<boolean>;
 	toggleDirty(): Promise<void>;
 	setFilter(text: string): void;
 	setHistoryPath(path: string | null, fallbackPaths?: readonly string[]): void;
@@ -105,6 +111,51 @@ function applyLoad(state: GraphState, byHash: Map<string, Commit>, result: { com
 	if (state.expandedHash !== null && !byHash.has(state.expandedHash)) collapse();
 }
 
+/** Applies a completed `loadMore()`: the page is appended and the lanes are laid out again. */
+function applyPage(state: GraphState, byHash: Map<string, Commit>, page: Commit[], at: { skip: number; pageSize: number }): void {
+	for (const c of page) byHash.set(c.hash, c);
+	state.commits = [...state.commits, ...page];
+	state.rows = layoutGraph(state.commits);
+	state.loadedCount = at.skip + at.pageSize;
+	state.hasMore = page.length >= at.pageSize;
+	state.error = null;
+}
+
+interface LoadTracker {
+	load: () => Promise<void>;
+	loadMore: () => Promise<void>;
+	/** The load or page load in flight, if any. */
+	inFlight: () => Promise<void> | null;
+}
+
+/**
+ * Wraps the raw loads so that their promises outlive the call that started them: a caller that
+ * arrives while one runs can wait for it. A repeat `loadMore` — the list asking again, or a step
+ * past the last row — gets the page already in flight instead of being turned away before the
+ * rows it needs are in.
+ */
+function trackLoads(state: GraphState, run: Omit<LoadTracker, 'inFlight'>, isDisposed: () => boolean): LoadTracker {
+	let pendingLoad: Promise<void> = Promise.resolve();
+	let pendingMore: Promise<void> = Promise.resolve();
+	return {
+		load() {
+			pendingLoad = run.load();
+			return pendingLoad;
+		},
+		loadMore() {
+			if (state.loadingMore) return pendingMore;
+			if (state.loading || !state.hasMore) return Promise.resolve();
+			pendingMore = run.loadMore();
+			return pendingMore;
+		},
+		inFlight() {
+			if (isDisposed()) return null;
+			if (state.loading) return pendingLoad;
+			return state.loadingMore ? pendingMore : null;
+		},
+	};
+}
+
 export function createGraphStore(deps: GraphStoreDeps): GraphStore {
 	const state = shallowReactive<GraphState>({
 		loading: false,
@@ -149,9 +200,10 @@ export function createGraphStore(deps: GraphStoreDeps): GraphStore {
 		});
 	});
 
-	const collapse = (): void => collapseExpansion(state);
+	const expansion = createExpansion({ reader: deps.reader, state, isDisposed: () => disposed, commitOf: (hash) => byHash.get(hash), historyPath: () => state.historyPath });
+	const collapse = expansion.collapse;
 
-	async function load(): Promise<void> {
+	async function runLoad(): Promise<void> {
 		const gen = ++generation;
 		// Bumping the generation supersedes any in-flight `loadMore`, so its flag is released here,
 		// whether this load succeeds or fails. Otherwise the list's one automatic request for the
@@ -175,8 +227,7 @@ export function createGraphStore(deps: GraphStoreDeps): GraphStore {
 		}
 	}
 
-	async function loadMore(): Promise<void> {
-		if (state.loading || state.loadingMore || !state.hasMore) return;
+	async function runLoadMore(): Promise<void> {
 		const gen = generation;
 		const { refFilter, pageSize } = deps.settings();
 		const skip = state.loadedCount;
@@ -184,12 +235,7 @@ export function createGraphStore(deps: GraphStoreDeps): GraphStore {
 		try {
 			const page = await deps.reader.log(logOptions(state, refFilter, skip, pageSize));
 			if (gen !== generation || disposed) return;
-			for (const c of page) byHash.set(c.hash, c);
-			state.commits = [...state.commits, ...page];
-			state.rows = layoutGraph(state.commits);
-			state.loadedCount = skip + pageSize;
-			state.hasMore = page.length >= pageSize;
-			state.error = null;
+			applyPage(state, byHash, page, { skip, pageSize });
 		} catch (e) {
 			if (gen !== generation || disposed) return;
 			state.error = errorMessage(e);
@@ -200,8 +246,8 @@ export function createGraphStore(deps: GraphStoreDeps): GraphStore {
 		}
 	}
 
-	const toggleExpand = createExpandToggler({ reader: deps.reader, state, isDisposed: () => disposed, commitOf: (hash) => byHash.get(hash) });
-	const expandAdjacent = createStepper({ state, visibleRows: () => visibleRows.value, hasMore: () => state.hasMore, loadMore, toggleExpand });
+	const { load, loadMore, inFlight } = trackLoads(state, { load: runLoad, loadMore: runLoadMore }, () => disposed);
+	const expandAdjacent = createStepper({ state, expansion, isDisposed: () => disposed, visibleRows: () => visibleRows.value, hasMore: () => state.hasMore, loadMore, inFlight });
 	const setHistoryPath = createHistoryPathSetter(state, byHash, collapse, load);
 
 	return {
@@ -211,7 +257,7 @@ export function createGraphStore(deps: GraphStoreDeps): GraphStore {
 		load,
 		loadMore,
 		refreshStatus: status.refresh,
-		toggleExpand,
+		toggleExpand: expansion.toggleExpand,
 		expandAdjacent,
 		toggleDirty: status.toggleDirty,
 		setFilter(text) {
@@ -221,6 +267,7 @@ export function createGraphStore(deps: GraphStoreDeps): GraphStore {
 		dispose() {
 			disposed = true;
 			generation++;
+			expansion.dispose();
 		},
 	};
 }

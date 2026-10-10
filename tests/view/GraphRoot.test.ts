@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import GraphRoot from '../../src/view/GraphRoot.vue';
 import { DEFAULT_SETTINGS } from '../../src/settings/types';
 import { createEmitter } from '../../src/util/emitter';
+import { STEP_SETTLE_MS } from '../../src/view/expansion';
 import type { RepoState } from '../../src/view/repoState';
 import { FakeReader, commit, linear } from '../helpers/fakeReader';
 
@@ -278,6 +279,8 @@ describe('GraphRoot', () => {
 		expect(reader.diffCalls).toEqual([{ hash: 'c1', file: { path: 'notes/a.md', status: 'M' } }]);
 		expect(w.get('.git-graph-diff-add').text()).toBe('+c1');
 		await w.get('.git-graph-step-older').trigger('click');
+		// A step asks git for the new commit's contents only once stepping pauses.
+		await new Promise((resolve) => window.setTimeout(resolve, STEP_SETTLE_MS));
 		reader.resolveDetails();
 		await flushPromises();
 		expect(w.get('.git-graph-row-expanded .git-graph-subject').text()).toBe('c2');

@@ -24,6 +24,8 @@ export class FakeReader implements GitReader {
 	pendingLogs: ((c: Commit[]) => void)[] = [];
 	deferLog = false;
 	detailsResolvers: (() => void)[] = [];
+	/** Every hash `commitDetails` was asked for, in order: one entry per git process spawned. */
+	detailsCalls: string[] = [];
 	detailFiles: ChangedFile[] = [];
 	dirtyFiles: ChangedFile[] = [];
 	deferStatus = false;
@@ -62,6 +64,7 @@ export class FakeReader implements GitReader {
 		return Promise.resolve(this.dirtyFiles);
 	}
 	commitDetails(hash: string): Promise<CommitDetails> {
+		this.detailsCalls.push(hash);
 		return new Promise<void>((resolve) => this.detailsResolvers.push(resolve)).then(() => ({
 			hash,
 			author: 'Ann',
@@ -82,8 +85,9 @@ export class FakeReader implements GitReader {
 		if (!this.deferDiff) return Promise.resolve().then(answer);
 		return new Promise<void>((resolve) => this.diffResolvers.push(resolve)).then(answer);
 	}
-	resolveDiffs(): void {
-		for (const r of this.diffResolvers.splice(0)) r();
+	/** Answers the oldest `count` pending diffs — all of them by default. */
+	resolveDiffs(count = this.diffResolvers.length): void {
+		for (const r of this.diffResolvers.splice(0, count)) r();
 	}
 	resolveDetails(): void {
 		for (const r of this.detailsResolvers.splice(0)) r();

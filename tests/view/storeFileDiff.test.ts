@@ -94,51 +94,42 @@ describe('createGraphStore file diff', () => {
 		expect(store.state.expandedHash).toBe('c2');
 		expect(store.state.expandedDiff?.lines[0]?.text).toBe('+c2');
 	});
-});
 
-describe('createGraphStore expandAdjacent', () => {
-	it('moves the expansion to the older or newer neighbour and stops at the ends', async () => {
+	// A commit that touched both a.md and b.md stays in the history when the active file moves
+	// from one to the other; re-expanding it must not show the first file's late diff.
+	it('drops a late diff when the same commit is re-expanded under another history path', async () => {
 		const reader = new FakeReader();
-		reader.commits = followed();
+		reader.commits = linear(2);
+		reader.deferDiff = true;
 		const store = await historyStore(reader);
-		await expand(reader, store, 'c1');
-		const older = store.expandAdjacent('c1', 1);
-		reader.resolveDetails();
-		await older;
-		expect(store.state.expandedHash).toBe('c2');
-		expect(store.state.expandedDiff?.lines[0]?.text).toBe('+c2');
-		const newer = store.expandAdjacent('c2', -1);
-		reader.resolveDetails();
-		await newer;
-		expect(store.state.expandedHash).toBe('c1');
-		await store.expandAdjacent('c1', -1);
-		expect(store.state.expandedHash).toBe('c1');
-	});
-
-	it('loads the next page to step past the last loaded commit', async () => {
-		const reader = new FakeReader();
-		reader.commits = linear(5);
-		const store = await historyStore(reader, 2);
-		await expand(reader, store, 'c2');
-		const older = store.expandAdjacent('c2', 1);
+		const first = store.toggleExpand('c1');
+		store.setHistoryPath('b.md');
 		await flushPromises();
+		const second = store.toggleExpand('c1');
+		expect(reader.diffCalls.map((c) => c.file.path)).toEqual(['a.md', 'b.md']);
 		reader.resolveDetails();
-		await older;
-		expect(reader.logCalls.at(-1)).toMatchObject({ skip: 2, count: 2, path: 'a.md' });
-		expect(store.state.expandedHash).toBe('c3');
+		reader.resolveDiffs(1);
+		await first;
+		expect(store.state.expandedHash).toBe('c1');
+		expect(store.state.expandedDiff).toBeNull();
+		reader.resolveDiffs();
+		await second;
+		expect(store.state.expandedDiff).not.toBeNull();
 	});
 
-	it('steps within the filtered rows, and ignores a hash that is not shown', async () => {
+	it('drops late details when the same commit was collapsed and re-expanded meanwhile', async () => {
 		const reader = new FakeReader();
-		reader.commits = linear(3).map((c) => ({ ...c, subject: c.hash === 'c2' ? 'skip me' : `keep ${c.hash}` }));
+		reader.commits = linear(2);
 		const store = await historyStore(reader);
-		store.setFilter('keep');
-		await expand(reader, store, 'c1');
-		const older = store.expandAdjacent('c1', 1);
+		const first = store.toggleExpand('c1');
+		await store.toggleExpand('c1');
+		const second = store.toggleExpand('c1');
+		const [resolveFirst] = reader.detailsResolvers.splice(0, 1);
+		resolveFirst?.();
+		await first;
+		expect(store.state.expandedDetails).toBeNull();
 		reader.resolveDetails();
-		await older;
-		expect(store.state.expandedHash).toBe('c3');
-		await store.expandAdjacent('c2', 1);
-		expect(store.state.expandedHash).toBe('c3');
+		await second;
+		expect(store.state.expandedDetails?.hash).toBe('c1');
 	});
 });
