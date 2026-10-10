@@ -1,0 +1,74 @@
+/* file mode: stepping between commits, and the followed file's diff in each */
+
+/* Sits at the very top of the expanded block, so it stays put while a click on it moves the
+   expansion one row on: CommitList keeps the expanded row at the same height in the viewport. */
+.git-graph-step {
+	display: flex;
+	gap: var(--size-4-2);
+	padding: var(--size-4-2) var(--size-4-3) 0 var(--size-4-4);
+	background: var(--background-secondary);
+}
+.git-graph-step button {
+	display: inline-flex;
+	align-items: center;
+	gap: var(--size-4-1);
+	height: auto;
+	padding: var(--size-2-1) var(--size-4-2);
+	font-size: var(--font-ui-smaller);
+}
+.git-graph-step .git-graph-icon {
+	display: inline-flex;
+}
+.git-graph-step .git-graph-icon svg {
+	width: var(--icon-xs);
+	height: var(--icon-xs);
+}
+
+.git-graph-change-rename,
+.git-graph-change-notice {
+	color: var(--text-muted);
+	margin: var(--size-4-1) 0;
+}
+
+/* The pane is narrow: long lines scroll sideways inside the diff instead of wrapping, so a
+   line keeps the shape it has in the file. */
+.git-graph-diff {
+	margin: var(--size-4-2) 0;
+	padding: var(--size-4-1) 0;
+	overflow-x: auto;
+	background: var(--background-primary);
+	border-radius: var(--radius-s);
+	font-family: var(--font-monospace);
+	font-size: var(--font-ui-smaller);
+	line-height: 1.5;
+}
+.git-graph-diff-line {
+	min-width: max-content;
+	min-height: 1.5em;
+	padding: 0 var(--size-4-2);
+	white-space: pre;
+	tab-size: 4;
+}
+.git-graph-diff-add {
+	background: color-mix(in srgb, var(--color-green) 16%, transparent);
+}
+.git-graph-diff-del {
+	background: color-mix(in srgb, var(--color-red) 16%, transparent);
+}
+.git-graph-diff-hunk {
+	color: var(--text-accent);
+	background: var(--background-modifier-hover);
+}
+.git-graph-diff-note {
+	color: var(--text-faint);
+	font-style: italic;
+}
+
+.git-graph-change-all summary {
+	cursor: pointer;
+	color: var(--text-muted);
+	margin-bottom: var(--size-4-1);
+}
+.git-graph-change-all summary:hover {
+	color: var(--text-normal);
+}

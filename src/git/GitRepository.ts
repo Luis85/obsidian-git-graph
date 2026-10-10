@@ -1,8 +1,9 @@
 import { resolve } from 'node:path';
+import { diffPathspecs, parseFileDiff, parseFollowLog } from './diff';
 import { GitError } from './GitError';
 import { LOG_FORMAT, REF_FORMAT, SHOW_FORMAT, countStatus, parseLog, parseNameStatus, parseRefs, parseShow, parseStatus } from './parse';
 import { runGit } from './runGit';
-import type { ChangedFile, Commit, CommitDetails, GitReader, RefFilter, RefsSnapshot } from './types';
+import type { ChangedFile, Commit, CommitDetails, FileDiff, GitReader, RefFilter, RefsSnapshot } from './types';
 
 export interface GitRepositoryOptions {
 	gitPath: string;
@@ -133,9 +134,10 @@ export class GitRepository implements GitReader {
 		return null;
 	}
 
+	/** `--name-status` records the file's path in each commit, which `fileDiff` needs once a rename lies between it and HEAD. */
 	private async runFollow(selection: string[], max: number, path: string): Promise<Commit[]> {
-		const out = await this.run(['log', '--topo-order', '-z', `--format=${LOG_FORMAT}`, `--max-count=${max}`, ...selection, '--follow', '--', `:(top,literal)${path}`]);
-		return parseLog(out);
+		const out = await this.run(['log', '--topo-order', '-z', `--format=${LOG_FORMAT}`, '--name-status', `--max-count=${max}`, ...selection, '--follow', '--', `:(top,literal)${path}`]);
+		return parseFollowLog(out);
 	}
 
 	/**
@@ -204,5 +206,16 @@ export class GitRepository implements GitReader {
 			this.run(['diff-tree', '--no-commit-id', '-r', '--name-status', '-z', '-M', '--root', '-m', '--first-parent', hash, '--']),
 		]);
 		return { ...parseShow(showOut), files: parseNameStatus(filesOut) };
+	}
+
+	/**
+	 * `diff-tree` is plumbing, so user diff configuration (external drivers, textconv, colour)
+	 * cannot change its output. Naming both paths of a rename lets `-M` pair them into one
+	 * section; `--root` gives a root commit its additions, and a merge is read against its first
+	 * parent (the first of the sections `-m` writes), like `commitDetails`.
+	 */
+	async fileDiff(hash: string, file: ChangedFile): Promise<FileDiff> {
+		const out = await this.run(['diff-tree', '-p', '-M', '--root', '-m', '--first-parent', '--no-commit-id', hash, '--', ...diffPathspecs(file)]);
+		return parseFileDiff(out);
 	}
 }

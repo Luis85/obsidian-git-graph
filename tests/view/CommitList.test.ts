@@ -12,8 +12,9 @@ const rows: Row[] = Array.from({ length: 1000 }, (_, i) => {
 	return { hash, lane: 0, color: 0, isMerge: false, laneCount: 1, segments: [] };
 });
 
-const mountList = (over: Record<string, unknown> = {}) =>
+const mountList = (over: Record<string, unknown> = {}, attachTo?: HTMLElement) =>
 	mount(CommitList, {
+		attachTo,
 		props: {
 			rows,
 			commitOf: (h: string) => commits.get(h),
@@ -191,5 +192,61 @@ describe('CommitList', () => {
 		} finally {
 			Reflect.deleteProperty(window, 'ResizeObserver');
 		}
+	});
+
+	describe('file mode', () => {
+		const fileChange = { file: { path: 'a.md', status: 'M' }, diff: { binary: false, truncated: false, lines: [{ kind: 'add', text: '+x' }] }, error: null };
+		const details = { hash: 'c1', author: 'Ann', email: 'a@x', authorDate: '2026-09-06T00:00:00Z', committer: 'Ann', commitDate: '2026-09-06T00:00:00Z', body: 'b', files: [{ path: 'a.md', status: 'M' }] };
+
+		it('shows the file diff in place of the file list, and keeps the plain list outside file mode', () => {
+			const w = mountList({ expandedHash: 'c1', expandedDetails: details, fileChange });
+			expect(w.find('.git-graph-diff-add').text()).toBe('+x');
+			expect(w.find('details.git-graph-change-all').exists()).toBe(true);
+			const plain = mountList({ expandedHash: 'c1', expandedDetails: details });
+			expect(plain.find('.git-graph-diff').exists()).toBe(false);
+			expect(plain.find('.git-graph-step').exists()).toBe(false);
+			expect(plain.findAll('.git-graph-file')).toHaveLength(1);
+		});
+
+		it('steps with the Newer/Older buttons, disabling the ones with nowhere to go', async () => {
+			const w = mountList({ rows: rows.slice(0, 3), expandedHash: 'c1', expandedDetails: details, fileChange });
+			await w.get('.git-graph-step-newer').trigger('click');
+			await w.get('.git-graph-step-older').trigger('click');
+			expect(w.emitted('step')).toEqual([['c1', -1], ['c1', 1]]);
+			const first = mountList({ rows: rows.slice(0, 3), expandedHash: 'c0', fileChange });
+			expect(first.get('.git-graph-step-newer').attributes('disabled')).toBeDefined();
+			const last = mountList({ rows: rows.slice(0, 3), expandedHash: 'c2', fileChange });
+			expect(last.get('.git-graph-step-older').attributes('disabled')).toBeDefined();
+			const more = mountList({ rows: rows.slice(0, 3), expandedHash: 'c2', fileChange, hasMore: true });
+			expect(more.get('.git-graph-step-older').attributes('disabled')).toBeUndefined();
+		});
+
+		it('steps from a focused row with the arrow keys, but not past either end', async () => {
+			const w = mountList({ rows: rows.slice(0, 3), fileChange });
+			const rowEls = w.findAll('.git-graph-row');
+			await rowEls[1]?.trigger('keydown', { key: 'ArrowDown' });
+			await rowEls[0]?.trigger('keydown', { key: 'ArrowUp' });
+			await rowEls[2]?.trigger('keydown', { key: 'ArrowDown' });
+			expect(w.emitted('step')).toEqual([['c1', 1]]);
+			const plain = mountList({ rows: rows.slice(0, 3) });
+			await plain.findAll('.git-graph-row')[1]?.trigger('keydown', { key: 'ArrowDown' });
+			expect(plain.emitted('step')).toBeUndefined();
+		});
+
+		// The stepped-to row takes the place the stepped-from row had in the viewport, so the
+		// Newer/Older buttons stay under the pointer while clicking through the history.
+		it('keeps the expanded row where it was in the viewport after a step, and focuses the same control', async () => {
+			const w = mountList({ expandedHash: 'c10', expandedDetails: details, fileChange, viewportHeight: 220 }, document.body);
+			const list = w.get('.git-graph-list');
+			(list.element as HTMLElement).scrollTop = 22 * 8;
+			await list.trigger('scroll');
+			await w.get('.git-graph-step-older').trigger('click');
+			await w.setProps({ expandedHash: 'c11' });
+			await nextTick();
+			expect((list.element as HTMLElement).scrollTop).toBe(22 * 9);
+			expect(document.activeElement?.classList.contains('git-graph-step-older')).toBe(true);
+			expect(document.activeElement?.closest('.git-graph-item')?.querySelector('.git-graph-row')?.textContent).toContain('Commit 11');
+			w.unmount();
+		});
 	});
 });

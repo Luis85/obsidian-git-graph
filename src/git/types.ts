@@ -8,6 +8,12 @@ export interface Commit {
 	email: string;
 	date: string;
 	subject: string;
+	/**
+	 * The followed file as it was in this commit — its path then, and the old path when this
+	 * commit renamed it. Only set on commits of a path-filtered `log`, where `--follow` may have
+	 * carried the history back past a rename.
+	 */
+	file?: ChangedFile;
 }
 
 export interface Ref {
@@ -41,6 +47,21 @@ export interface CommitDetails {
 	files: ChangedFile[];
 }
 
+export type DiffLineKind = 'hunk' | 'ctx' | 'add' | 'del' | 'note';
+
+export interface DiffLine {
+	kind: DiffLineKind;
+	/** The line as git wrote it, including its leading ` `, `+`, `-` or `\`. */
+	text: string;
+}
+
+export interface FileDiff {
+	binary: boolean;
+	/** True when the diff was longer than the pane will render and `lines` stops early. */
+	truncated: boolean;
+	lines: DiffLine[];
+}
+
 export interface GitReader {
 	/**
 	 * `path`, when given, narrows the log to one file's history (renames followed). It is
@@ -65,4 +86,6 @@ export interface GitReader {
 	status(): Promise<{ changed: number }>;
 	statusFiles(): Promise<ChangedFile[]>;
 	commitDetails(hash: string): Promise<CommitDetails>;
+	/** One file's changes in one commit, against its first parent (or nothing, for a root commit). */
+	fileDiff(hash: string, file: ChangedFile): Promise<FileDiff>;
 }

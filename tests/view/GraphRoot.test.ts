@@ -264,4 +264,31 @@ describe('GraphRoot', () => {
 		await w.get('.git-graph-file-link').trigger('click');
 		expect(w.emitted('openFile')).toEqual([['notes/a.md']]);
 	});
+
+	it("shows the active file's diff for an expanded commit in file mode and steps to the older one", async () => {
+		const reader = new FakeReader();
+		reader.commits = linear(3);
+		const w = mountRoot({ kind: 'ready', root: 'C:/vault', reader }, createEmitter<void>(), createEmitter<void>(), 'notes/a.md');
+		await flushPromises();
+		await w.get('button.git-graph-history-toggle').trigger('click');
+		await flushPromises();
+		await w.findAll('.git-graph-row')[0]?.trigger('click');
+		reader.resolveDetails();
+		await flushPromises();
+		expect(reader.diffCalls).toEqual([{ hash: 'c1', file: { path: 'notes/a.md', status: 'M' } }]);
+		expect(w.get('.git-graph-diff-add').text()).toBe('+c1');
+		await w.get('.git-graph-step-older').trigger('click');
+		reader.resolveDetails();
+		await flushPromises();
+		expect(w.get('.git-graph-row-expanded .git-graph-subject').text()).toBe('c2');
+		expect(w.get('.git-graph-diff-add').text()).toBe('+c2');
+		// Leaving file mode collapses the expansion; a commit opened in the graph lists its files.
+		await w.get('button.git-graph-history-toggle').trigger('click');
+		await flushPromises();
+		await w.findAll('.git-graph-row')[0]?.trigger('click');
+		reader.resolveDetails();
+		await flushPromises();
+		expect(w.find('.git-graph-diff').exists()).toBe(false);
+		expect(w.find('.git-graph-step').exists()).toBe(false);
+	});
 });

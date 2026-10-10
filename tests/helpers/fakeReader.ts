@@ -1,4 +1,4 @@
-import type { ChangedFile, Commit, CommitDetails, GitReader, RefFilter, RefsSnapshot } from '../../src/git/types';
+import type { ChangedFile, Commit, CommitDetails, FileDiff, GitReader, RefFilter, RefsSnapshot } from '../../src/git/types';
 
 export const commit = (hash: string, parent: string | null, subject = hash, author = 'Ann'): Commit => ({
 	hash,
@@ -30,6 +30,11 @@ export class FakeReader implements GitReader {
 	pendingStatus: ((changed: number) => void)[] = [];
 	deferStatusFiles = false;
 	pendingStatusFiles: ((files: ChangedFile[]) => void)[] = [];
+	diffCalls: { hash: string; file: ChangedFile }[] = [];
+	/** When set, `fileDiff` waits for `resolveDiffs()`; otherwise it answers at once. */
+	deferDiff = false;
+	diffResolvers: (() => void)[] = [];
+	failDiff: Error | null = null;
 	/** Repository-relative paths HEAD's tree contains, for `inHead`. */
 	headPaths = new Set<string>();
 
@@ -67,6 +72,18 @@ export class FakeReader implements GitReader {
 			body: `body of ${hash}`,
 			files: this.detailFiles,
 		}));
+	}
+	fileDiff(hash: string, file: ChangedFile): Promise<FileDiff> {
+		this.diffCalls.push({ hash, file });
+		const answer = (): FileDiff => {
+			if (this.failDiff) throw this.failDiff;
+			return { binary: false, truncated: false, lines: [{ kind: 'add', text: `+${hash}` }] };
+		};
+		if (!this.deferDiff) return Promise.resolve().then(answer);
+		return new Promise<void>((resolve) => this.diffResolvers.push(resolve)).then(answer);
+	}
+	resolveDiffs(): void {
+		for (const r of this.diffResolvers.splice(0)) r();
 	}
 	resolveDetails(): void {
 		for (const r of this.detailsResolvers.splice(0)) r();

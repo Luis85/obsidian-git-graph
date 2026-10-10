@@ -44,4 +44,15 @@ describe('CommitRow', () => {
 		await w.trigger('keydown', { key: 'x' });
 		expect(w.emitted('toggle')).toHaveLength(2);
 	});
+
+	// Only file mode steps between commits; elsewhere the arrow keys keep their usual meaning.
+	it('emits step on ArrowDown/ArrowUp only when steppable', async () => {
+		const plain = mountRow();
+		await plain.trigger('keydown', { key: 'ArrowDown' });
+		expect(plain.emitted('step')).toBeUndefined();
+		const w = mountRow({ steppable: true });
+		await w.trigger('keydown', { key: 'ArrowDown' });
+		await w.trigger('keydown', { key: 'ArrowUp' });
+		expect(w.emitted('step')).toEqual([[1], [-1]]);
+	});
 });

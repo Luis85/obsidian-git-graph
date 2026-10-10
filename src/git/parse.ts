@@ -9,21 +9,24 @@ export const LOG_FORMAT = '%H%x1f%P%x1f%an%x1f%ae%x1f%aI%x1f%s';
 export const REF_FORMAT = '%(objectname)%1f%(*objectname)%1f%(refname)%1f%(upstream:short)%1f%(HEAD)';
 export const SHOW_FORMAT = '%H%x1f%an%x1f%ae%x1f%aI%x1f%cn%x1f%cI%x1f%B';
 
+/** One `LOG_FORMAT` record. */
+export function parseCommitRecord(record: string): Commit {
+	const [hash = '', parents = '', author = '', email = '', date = '', ...subject] = record.split(FIELD_SEP);
+	return {
+		hash,
+		parents: parents.length === 0 ? [] : parents.split(' '),
+		author,
+		email,
+		date,
+		subject: subject.join(FIELD_SEP),
+	};
+}
+
 export function parseLog(stdout: string): Commit[] {
 	return stdout
 		.split(RECORD_SEP)
 		.filter((record) => record.length > 0)
-		.map((record) => {
-			const [hash = '', parents = '', author = '', email = '', date = '', ...subject] = record.split(FIELD_SEP);
-			return {
-				hash,
-				parents: parents.length === 0 ? [] : parents.split(' '),
-				author,
-				email,
-				date,
-				subject: subject.join(FIELD_SEP),
-			};
-		});
+		.map(parseCommitRecord);
 }
 
 const REF_KINDS: readonly [prefix: string, kind: Ref['kind']][] = [

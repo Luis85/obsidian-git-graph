@@ -1,9 +1,10 @@
 import { computed, shallowReactive, type ComputedRef } from 'vue';
-import type { Commit, CommitDetails, GitReader, Ref, RefFilter, RefsSnapshot } from '../git/types';
+import type { Commit, GitReader, Ref, RefFilter, RefsSnapshot } from '../git/types';
 import { layoutGraph } from '../graph/layout';
 import type { Row } from '../graph/types';
 import type { GitGraphSettings } from '../settings/types';
 import { errorMessage } from './errors';
+import { collapseExpansion, createExpandToggler, createStepper, INITIAL_EXPANSION, type ExpansionState } from './expansion';
 import { createStatusSync, type StatusState } from './statusSync';
 
 export interface GraphStoreDeps {
@@ -11,7 +12,7 @@ export interface GraphStoreDeps {
 	settings: () => Pick<GitGraphSettings, 'refFilter' | 'pageSize' | 'showDirtyRow'>;
 }
 
-export interface GraphState extends StatusState {
+export interface GraphState extends StatusState, ExpansionState {
 	loading: boolean;
 	loadingMore: boolean;
 	error: string | null;
@@ -22,11 +23,7 @@ export interface GraphState extends StatusState {
 	headBranch: string | null;
 	loadedCount: number;
 	hasMore: boolean;
-	expandedHash: string | null;
-	expandedDetails: CommitDetails | null;
-	detailsError: string | null;
 	filterText: string;
-	historyPath: string | null;
 	historyFallbackPaths: readonly string[];
 }
 
@@ -38,6 +35,8 @@ export interface GraphStore {
 	loadMore(): Promise<void>;
 	refreshStatus(): Promise<void>;
 	toggleExpand(hash: string): Promise<void>;
+	/** Expands the shown commit `step` rows from `fromHash`: +1 is older, -1 newer. */
+	expandAdjacent(fromHash: string, step: 1 | -1): Promise<void>;
 	toggleDirty(): Promise<void>;
 	setFilter(text: string): void;
 	setHistoryPath(path: string | null, fallbackPaths?: readonly string[]): void;
@@ -52,27 +51,6 @@ function groupRefs(refs: Ref[]): Map<string, Ref[]> {
 		else map.set(ref.hash, [ref]);
 	}
 	return map;
-}
-
-/** Builds `toggleExpand`: expands/collapses a row and loads its details, ignoring stale results. */
-function createExpandToggler(deps: GraphStoreDeps, state: GraphState, isDisposed: () => boolean, collapse: () => void): (hash: string) => Promise<void> {
-	return async function toggleExpand(hash: string): Promise<void> {
-		if (state.expandedHash === hash) {
-			collapse();
-			return;
-		}
-		state.expandedHash = hash;
-		state.expandedDetails = null;
-		state.detailsError = null;
-		try {
-			const details = await deps.reader.commitDetails(hash);
-			if (isDisposed() || state.expandedHash !== hash) return;
-			state.expandedDetails = details;
-		} catch (e) {
-			if (isDisposed() || state.expandedHash !== hash) return;
-			state.detailsError = errorMessage(e);
-		}
-	};
 }
 
 /** Assembles `reader.log` options, including `path`/`fallbackPaths` only when set (never `path: undefined`). */
@@ -112,13 +90,6 @@ function createHistoryPathSetter(state: GraphState, byHash: Map<string, Commit>,
 	};
 }
 
-/** Collapses the expanded commit, if any, and forgets its details. */
-function collapseExpansion(state: GraphState): void {
-	state.expandedHash = null;
-	state.expandedDetails = null;
-	state.detailsError = null;
-}
-
 /** Applies a completed `load()`: rows/refs/head are replaced wholesale. Status is applied separately, by `statusSync`. */
 function applyLoad(state: GraphState, byHash: Map<string, Commit>, result: { commits: Commit[]; refs: RefsSnapshot; count: number }, collapse: () => void): void {
 	const { commits, refs, count } = result;
@@ -151,9 +122,7 @@ export function createGraphStore(deps: GraphStoreDeps): GraphStore {
 		dirtyError: null,
 		loadedCount: 0,
 		hasMore: false,
-		expandedHash: null,
-		expandedDetails: null,
-		detailsError: null,
+		...INITIAL_EXPANSION,
 		filterText: '',
 		historyPath: null,
 		historyFallbackPaths: [],
@@ -231,7 +200,8 @@ export function createGraphStore(deps: GraphStoreDeps): GraphStore {
 		}
 	}
 
-	const toggleExpand = createExpandToggler(deps, state, () => disposed, collapse);
+	const toggleExpand = createExpandToggler({ reader: deps.reader, state, isDisposed: () => disposed, commitOf: (hash) => byHash.get(hash) });
+	const expandAdjacent = createStepper({ state, visibleRows: () => visibleRows.value, hasMore: () => state.hasMore, loadMore, toggleExpand });
 	const setHistoryPath = createHistoryPathSetter(state, byHash, collapse, load);
 
 	return {
@@ -242,6 +212,7 @@ export function createGraphStore(deps: GraphStoreDeps): GraphStore {
 		loadMore,
 		refreshStatus: status.refresh,
 		toggleExpand,
+		expandAdjacent,
 		toggleDirty: status.toggleDirty,
 		setFilter(text) {
 			state.filterText = text;

@@ -15,8 +15,10 @@ const props = defineProps<{
 	expanded: boolean;
 	dateFormat: DateFormat;
 	showGraph: boolean;
+	/** File mode: the arrow keys step the expansion to the next newer/older commit. */
+	steppable?: boolean;
 }>();
-const emit = defineEmits<{ toggle: [] }>();
+const emit = defineEmits<{ toggle: []; step: [step: 1 | -1] }>();
 
 const ORDER: Record<Ref['kind'], number> = { branch: 1, remote: 2, tag: 3 };
 const sortedRefs = computed(() =>
@@ -28,10 +30,18 @@ const isUpstream = (ref: Ref): boolean => ref.kind === 'remote' && ref.name === 
 const dateText = computed(() => formatDate(props.commit.date, props.dateFormat));
 const dateTitle = computed(() => formatAbsolute(props.commit.date));
 
+const STEP_KEYS: Record<string, 1 | -1> = { ArrowDown: 1, ArrowUp: -1 };
+
 function onKey(e: KeyboardEvent): void {
 	if (e.key === 'Enter' || e.key === ' ') {
 		e.preventDefault();
 		emit('toggle');
+		return;
+	}
+	const step = STEP_KEYS[e.key];
+	if (props.steppable === true && step !== undefined) {
+		e.preventDefault();
+		emit('step', step);
 	}
 }
 </script>

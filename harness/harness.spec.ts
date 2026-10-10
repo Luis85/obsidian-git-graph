@@ -232,6 +232,25 @@ test('history filters rows to only the commits touching the active file', async 
 	await expect(page.locator('.git-graph-history-toggle')).toHaveAttribute('aria-pressed', 'true');
 });
 
+test('history shows the file diff of an expanded commit and steps through the commits', async ({ page }) => {
+	await open(page, 'scenario=long&file=README.md');
+	const rows = page.locator('.git-graph-row');
+	const second = await rows.nth(1).locator('.git-graph-subject').textContent();
+	await rows.first().click();
+	await expect(page.locator('.git-graph-diff-hunk')).toHaveCount(1);
+	await expect(page.locator('.git-graph-step-newer')).toBeDisabled();
+	const top = (await page.locator('.git-graph-row-expanded').boundingBox())?.y;
+	await page.locator('.git-graph-step-older').click();
+	await expect(page.locator('.git-graph-row-expanded .git-graph-subject')).toHaveText(second ?? '');
+	// The stepped-to row takes the stepped-from row's place, and the Older button keeps focus.
+	expect((await page.locator('.git-graph-row-expanded').boundingBox())?.y).toBe(top);
+	await expect(page.locator('.git-graph-step-older')).toBeFocused();
+	await page.locator('.git-graph-row-expanded').focus();
+	await page.keyboard.press('ArrowUp');
+	await expect(page.locator('.git-graph-step-newer')).toBeDisabled();
+	await expect(page.locator('.git-graph-diff')).toContainText('+');
+});
+
 test('history reports no commits for a file none of them touched', async ({ page }) => {
 	await open(page, 'scenario=merge&file=no/such.md');
 	await expect(page.locator('.git-graph-empty')).toHaveText('No commits for this file yet.');

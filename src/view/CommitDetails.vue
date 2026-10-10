@@ -45,10 +45,16 @@ function copy(text: string): void {
         </div>
       </div>
       <pre class="git-graph-details-body">{{ details.body }}</pre>
-      <FileList
+      <!-- File mode swaps the plain list for the followed file's diff. -->
+      <slot
+        name="files"
         :files="details.files"
-        @open-file="emit('openFile', $event)"
-      />
+      >
+        <FileList
+          :files="details.files"
+          @open-file="emit('openFile', $event)"
+        />
+      </slot>
     </template>
   </div>
 </template>

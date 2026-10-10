@@ -5,7 +5,7 @@
 // (relative dates are the one exception — they are rendered against the wall clock by
 // src/view/dates.ts; pass `dateFormat=absolute` when that matters).
 
-import type { ChangedFile, Commit, CommitDetails, FileStatus, GitReader, Ref, RefsSnapshot } from '../src/git/types';
+import type { ChangedFile, Commit, CommitDetails, DiffLine, FileDiff, FileStatus, GitReader, Ref, RefsSnapshot } from '../src/git/types';
 
 export interface Scenario {
 	readonly name: string;
@@ -153,6 +153,37 @@ function detailsFor(commit: Commit): CommitDetails {
 		commitDate: commit.date,
 		body: `${commit.subject}\n\n${BODIES[seed % BODIES.length] ?? BODIES[0]}`,
 		files,
+	};
+}
+
+/**
+ * A small, believable patch for one file of one commit: an addition is all `+`, a deletion all
+ * `-`, anything else one hunk that rewrites a line in context. The text comes from the subject,
+ * so stepping through a file's history visibly changes the diff.
+ */
+function diffFor(commit: Commit, file: ChangedFile): FileDiff {
+	const seed = Number.parseInt(commit.hash.slice(4, 8), 16);
+	const body = [`// ${commit.subject}`, `export const step = ${seed % 97};`, '', 'function render(): void {', '\tdraw();', '}'];
+	const whole = (kind: 'add' | 'del', hunk: string): FileDiff => ({
+		binary: false,
+		truncated: false,
+		lines: [{ kind: 'hunk', text: hunk }, ...body.map((t): DiffLine => ({ kind, text: `${kind === 'add' ? '+' : '-'}${t}` }))],
+	});
+	if (file.status === 'A') return whole('add', `@@ -0,0 +1,${body.length} @@`);
+	if (file.status === 'D') return whole('del', `@@ -1,${body.length} +0,0 @@`);
+	const at = 10 + (seed % 120);
+	return {
+		binary: false,
+		truncated: false,
+		lines: [
+			{ kind: 'hunk', text: `@@ -${at},5 +${at},6 @@ function render(): void {` },
+			{ kind: 'ctx', text: ' \tconst rows = visibleRows();' },
+			{ kind: 'del', text: `-\tconst step = ${(seed + 3) % 97};` },
+			{ kind: 'add', text: `+\tconst step = ${seed % 97};` },
+			{ kind: 'add', text: `+\t// ${commit.subject}` },
+			{ kind: 'ctx', text: ' \tfor (const row of rows) draw(row);' },
+			{ kind: 'ctx', text: ' }' },
+		],
 	};
 }
 
@@ -411,7 +442,7 @@ const delay = (ms: number): Promise<void> => (ms <= 0 ? Promise.resolve() : new 
 /**
  * A GitReader over one fixture. `log` honours skip/count so paging is real, and honours `path`
  * by keeping only commits whose fixture file list (`detailsFor`) contains it, so the history
- * toggle shows a real subset. It ignores the ref filter, because a fixture is a pre-baked commit
+ * toggle shows a real subset — each commit carrying that file, as a followed log does. It ignores the ref filter, because a fixture is a pre-baked commit
  * list rather than a graph walk — changing `refs=auto|all` in the harness changes the header
  * dropdown and what the store asks for, not which commits come back.
  */
@@ -426,8 +457,12 @@ export function createScenarioReader(name: string): GitReader {
 		log({ skip, count, path }) {
 			logCalls++;
 			if (f.failLogAfterFirst === true && logCalls > 1) return Promise.reject(new Error('fatal: bad object HEAD'));
-			const commits = path === undefined ? f.commits : f.commits.filter((c) => detailsFor(c).files.some((file) => file.path === path));
-			return Promise.resolve(commits.slice(skip, skip + count));
+			if (path === undefined) return Promise.resolve(f.commits.slice(skip, skip + count));
+			const followed = f.commits.flatMap((c) => {
+				const file = detailsFor(c).files.find((candidate) => candidate.path === path);
+				return file === undefined ? [] : [{ ...c, file }];
+			});
+			return Promise.resolve(followed.slice(skip, skip + count));
 		},
 		// The harness has no working tree behind it, so no earlier path is ever worth keeping.
 		inHead: () => Promise.resolve(false),
@@ -438,6 +473,11 @@ export function createScenarioReader(name: string): GitReader {
 			const commit = byHash.get(hash);
 			if (commit === undefined) return Promise.reject(new Error(`fatal: bad object ${hash}`));
 			return delay(f.detailsDelayMs ?? 0).then(() => detailsFor(commit));
+		},
+		fileDiff(hash, file) {
+			const commit = byHash.get(hash);
+			if (commit === undefined) return Promise.reject(new Error(`fatal: bad object ${hash}`));
+			return delay(f.detailsDelayMs ?? 0).then(() => diffFor(commit, file));
 		},
 	};
 }
