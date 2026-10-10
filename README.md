@@ -48,7 +48,11 @@ open in the active editor, as a flat list with the graph lanes hidden; switching
 file re-filters it, and clicking the icon again returns to the full graph. Renames are
 followed, including one made in Obsidian and not yet committed. File history obeys
 the **Refs to show** setting like the rest of the pane, so on Auto a commit that touched the
-file on an unmerged branch is not listed until you switch to All.
+file on an unmerged branch is not listed until you switch to All. In file history, an
+expanded commit shows that file's diff (against the commit's first parent) instead of the
+file list, which stays one click away under **All files**; **Newer** / **Older** — or ↑ / ↓
+on the expanded row — step to the neighbouring commit, keeping it where the last one was and
+paging in older history as needed. On any other row ↑ / ↓ move the focus between rows.
 
 ## Settings
 

@@ -19,9 +19,17 @@ body {
 	--text-faint: #999999;
 	--text-on-accent: #ffffff;
 	--text-error: #e93147;
+	--text-accent: #7b6cf6;
 
+	--background-modifier-border-focus: #bababa;
+
+	--interactive-normal: #ffffff;
+	--interactive-hover: #f2f3f5;
 	--interactive-accent: #7b6cf6;
 	--interactive-accent-hover: #8a7cf8;
+	--input-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.12), 0 2px 3px 0 rgba(0, 0, 0, 0.05), 0 1px 1.5px 0 rgba(0, 0, 0, 0.03), 0 1px 2px 0 rgba(0, 0, 0, 0.04), 0 0 0 0 transparent;
+
+	--icon-xs: 14px;
 
 	--color-red: #e93147;
 	--color-orange: #ec7500;
@@ -64,9 +72,15 @@ body.theme-dark {
 	--text-faint: #7a7a7a;
 	--text-on-accent: #ffffff;
 	--text-error: #fb464c;
+	--text-accent: #a68af9;
 
+	--background-modifier-border-focus: #3f3f3f;
+
+	--interactive-normal: #2a2a2a;
+	--interactive-hover: #303030;
 	--interactive-accent: #8f7ef8;
 	--interactive-accent-hover: #a08ff9;
+	--input-shadow: inset 0 0.5px 0.5px 0.5px rgba(255, 255, 255, 0.09), 0 2px 4px 0 rgba(0, 0, 0, 0.15), 0 1px 1.5px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.2), 0 0 0 0 transparent;
 
 	--color-red: #fb464c;
 	--color-orange: #e9973f;
@@ -87,7 +101,22 @@ body {
 	font-size: var(--font-ui-small);
 }
 
-/* Obsidian control base styles that styles.css leans on. */
+/* Obsidian control base styles that styles.css leans on. A plain button first: the Newer/Older
+   step buttons are unclassed and take Obsidian's look, which this approximates. */
+button {
+	padding: var(--size-2-2) var(--size-4-3);
+	border: none;
+	border-radius: var(--radius-s);
+	background: var(--interactive-normal);
+	box-shadow: var(--input-shadow);
+	color: var(--text-normal);
+	font-family: inherit;
+	font-size: var(--font-ui-smaller);
+	cursor: pointer;
+}
+button:hover:not(:disabled) {
+	background: var(--interactive-hover);
+}
 .clickable-icon {
 	display: inline-flex;
 	align-items: center;
@@ -183,6 +212,7 @@ input[type='search']::placeholder {
 	border: 1px solid var(--background-modifier-border);
 	border-radius: var(--radius-s);
 	background: var(--background-primary);
+	box-shadow: none;
 	color: var(--text-normal);
 	font-family: inherit;
 	font-size: var(--font-ui-smaller);

@@ -9,21 +9,24 @@ export const LOG_FORMAT = '%H%x1f%P%x1f%an%x1f%ae%x1f%aI%x1f%s';
 export const REF_FORMAT = '%(objectname)%1f%(*objectname)%1f%(refname)%1f%(upstream:short)%1f%(HEAD)';
 export const SHOW_FORMAT = '%H%x1f%an%x1f%ae%x1f%aI%x1f%cn%x1f%cI%x1f%B';
 
+/** One `LOG_FORMAT` record. */
+function parseCommitRecord(record: string): Commit {
+	const [hash = '', parents = '', author = '', email = '', date = '', ...subject] = record.split(FIELD_SEP);
+	return {
+		hash,
+		parents: parents.length === 0 ? [] : parents.split(' '),
+		author,
+		email,
+		date,
+		subject: subject.join(FIELD_SEP),
+	};
+}
+
 export function parseLog(stdout: string): Commit[] {
 	return stdout
 		.split(RECORD_SEP)
 		.filter((record) => record.length > 0)
-		.map((record) => {
-			const [hash = '', parents = '', author = '', email = '', date = '', ...subject] = record.split(FIELD_SEP);
-			return {
-				hash,
-				parents: parents.length === 0 ? [] : parents.split(' '),
-				author,
-				email,
-				date,
-				subject: subject.join(FIELD_SEP),
-			};
-		});
+		.map(parseCommitRecord);
 }
 
 const REF_KINDS: readonly [prefix: string, kind: Ref['kind']][] = [
@@ -81,6 +84,59 @@ export function parseNameStatus(stdout: string): ChangedFile[] {
 }
 
 const STATUS_LETTERS = new Set<string>(['A', 'M', 'D', 'R', 'C', 'T']);
+
+/** A `--name-status` status token: the letter, then a similarity score for a rename or copy. */
+const NAME_STATUS = /^[ACDMRTUXB]\d*$/;
+
+/**
+ * The name-status entry starting at `tokens[i]` and the index after it, or null when that token
+ * is not a status. Letters this plugin has no label for (`U`, `X`, `B`) read as a modification.
+ */
+function readEntry(tokens: readonly string[], i: number): [ChangedFile, number] | null {
+	const status = (tokens[i] ?? '').replace(/^\n/, '');
+	if (!NAME_STATUS.test(status)) return null;
+	const letter = status.charAt(0);
+	const label = (STATUS_LETTERS.has(letter) ? letter : 'M') as FileStatus;
+	if (TWO_PATH.has(letter)) return [{ path: tokens[i + 2] ?? '', status: label, oldPath: tokens[i + 1] ?? '' }, i + 3];
+	return [{ path: tokens[i + 1] ?? '', status: label }, i + 2];
+}
+
+/** The entry for `followed` — as the file it names, else as the source it came from — or the first. */
+function pickEntry(entries: readonly ChangedFile[], followed: string): ChangedFile | undefined {
+	return entries.find((e) => e.path === followed) ?? entries.find((e) => e.oldPath === followed) ?? entries[0];
+}
+
+/**
+ * Parses `git log -z --name-status --follow` (with `LOG_FORMAT`) for the history of `path`. Each
+ * commit is its format record, then — when git has a change to show for it — its name-status
+ * entries: a status (`M`, `R100`, …) and one path, or the old and new path for a rename or copy.
+ * Only the first status carries a leading newline. A commit can list several entries, because
+ * the pathspec also matches a directory of that name (a commit that replaced `Docs/` with a file
+ * `Docs` lists `A Docs` and a `D` for every file under it); the one for the followed path is
+ * kept. Below a rename the file is followed by its old path. A commit git shows without entries
+ * (a merge, which `--follow` normally leaves out) simply gets no `file`. Only a token holding a
+ * field separator is a commit record, so a path is never mistaken for one.
+ */
+export function parseFollowLog(stdout: string, path: string): Commit[] {
+	const tokens = stdout.split(RECORD_SEP);
+	const commits: Commit[] = [];
+	let followed = path;
+	for (let i = 0; i < tokens.length; ) {
+		const record = tokens[i++] ?? '';
+		if (!record.includes(FIELD_SEP)) continue;
+		const entries: ChangedFile[] = [];
+		for (let entry = readEntry(tokens, i); entry !== null; entry = readEntry(tokens, i)) {
+			entries.push(entry[0]);
+			i = entry[1];
+		}
+		const commit = parseCommitRecord(record);
+		const file = pickEntry(entries, followed);
+		if (file !== undefined) commit.file = file;
+		if (file?.path === followed && file.oldPath !== undefined) followed = file.oldPath;
+		commits.push(commit);
+	}
+	return commits;
+}
 
 /**
  * The single status letter for one porcelain `XY` pair: a rename/copy in either column wins

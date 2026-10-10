@@ -4,7 +4,15 @@ import { formatAbsolute } from './dates';
 import FileList from './FileList.vue';
 import Icon from './Icon.vue';
 
-defineProps<{ details: CommitDetails | null; error: string | null }>();
+defineProps<{
+	details: CommitDetails | null;
+	error: string | null;
+	/**
+	 * File mode: the header only. CommitList shows the followed file's diff next, and the
+	 * commit's files after that, so the diff never waits on (or vanishes with) these details.
+	 */
+	hideFiles?: boolean;
+}>();
 const emit = defineEmits<{ openFile: [path: string] }>();
 
 function copy(text: string): void {
@@ -13,7 +21,7 @@ function copy(text: string): void {
 </script>
 
 <template>
-  <div class="git-graph-details">
+  <div :class="['git-graph-details', { 'git-graph-details-lead': hideFiles }]">
     <div
       v-if="error !== null"
       class="git-graph-details-error"
@@ -46,6 +54,7 @@ function copy(text: string): void {
       </div>
       <pre class="git-graph-details-body">{{ details.body }}</pre>
       <FileList
+        v-if="!hideFiles"
         :files="details.files"
         @open-file="emit('openFile', $event)"
       />

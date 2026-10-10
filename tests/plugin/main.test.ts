@@ -19,7 +19,7 @@ import { GitRepository } from '../../src/git/GitRepository';
 import GitGraphPlugin, { GIT_PATH_DEBOUNCE_MS, STATUS_DEBOUNCE_MS } from '../../src/main';
 import { DEFAULT_SETTINGS } from '../../src/settings/types';
 import { GIT_GRAPH_VIEW } from '../../src/view/GitGraphView';
-import { createFixtureRepo, type FixtureRepo } from '../helpers/fixtureRepo';
+import { createFixtureRepo, REMOVE_TEMP, type FixtureRepo } from '../helpers/fixtureRepo';
 
 let fixture: FixtureRepo;
 beforeAll(() => {
@@ -89,7 +89,7 @@ describe('GitGraphPlugin', () => {
 			expect(broken.repoState.value).toEqual({ kind: 'no-git', gitPath: 'no-such-git' });
 			broken.onunload();
 		} finally {
-			rmSync(outside, { recursive: true, force: true });
+			rmSync(outside, REMOVE_TEMP);
 		}
 	});
 
@@ -231,7 +231,7 @@ describe('GitGraphPlugin', () => {
 				expect(statusChanges).toBe(0);
 				plugin.onunload();
 			} finally {
-				rmSync(outside, { recursive: true, force: true });
+				rmSync(outside, REMOVE_TEMP);
 			}
 		});
 

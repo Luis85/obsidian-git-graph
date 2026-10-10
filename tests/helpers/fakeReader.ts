@@ -1,4 +1,4 @@
-import type { ChangedFile, Commit, CommitDetails, GitReader, RefFilter, RefsSnapshot } from '../../src/git/types';
+import type { ChangedFile, Commit, CommitDetails, FileDiff, GitReader, RefFilter, RefsSnapshot } from '../../src/git/types';
 
 export const commit = (hash: string, parent: string | null, subject = hash, author = 'Ann'): Commit => ({
 	hash,
@@ -24,12 +24,19 @@ export class FakeReader implements GitReader {
 	pendingLogs: ((c: Commit[]) => void)[] = [];
 	deferLog = false;
 	detailsResolvers: (() => void)[] = [];
+	/** Every hash `commitDetails` was asked for, in order: one entry per git process spawned. */
+	detailsCalls: string[] = [];
 	detailFiles: ChangedFile[] = [];
 	dirtyFiles: ChangedFile[] = [];
 	deferStatus = false;
 	pendingStatus: ((changed: number) => void)[] = [];
 	deferStatusFiles = false;
 	pendingStatusFiles: ((files: ChangedFile[]) => void)[] = [];
+	diffCalls: { hash: string; file: ChangedFile }[] = [];
+	/** When set, `fileDiff` waits for `resolveDiffs()`; otherwise it answers at once. */
+	deferDiff = false;
+	diffResolvers: (() => void)[] = [];
+	failDiff: Error | null = null;
 	/** Repository-relative paths HEAD's tree contains, for `inHead`. */
 	headPaths = new Set<string>();
 
@@ -57,6 +64,7 @@ export class FakeReader implements GitReader {
 		return Promise.resolve(this.dirtyFiles);
 	}
 	commitDetails(hash: string): Promise<CommitDetails> {
+		this.detailsCalls.push(hash);
 		return new Promise<void>((resolve) => this.detailsResolvers.push(resolve)).then(() => ({
 			hash,
 			author: 'Ann',
@@ -67,6 +75,19 @@ export class FakeReader implements GitReader {
 			body: `body of ${hash}`,
 			files: this.detailFiles,
 		}));
+	}
+	fileDiff(hash: string, file: ChangedFile): Promise<FileDiff> {
+		this.diffCalls.push({ hash, file });
+		const answer = (): FileDiff => {
+			if (this.failDiff) throw this.failDiff;
+			return { binary: false, truncated: false, lines: [{ kind: 'add', text: `+${hash}` }] };
+		};
+		if (!this.deferDiff) return Promise.resolve().then(answer);
+		return new Promise<void>((resolve) => this.diffResolvers.push(resolve)).then(answer);
+	}
+	/** Answers the oldest `count` pending diffs — all of them by default. */
+	resolveDiffs(count = this.diffResolvers.length): void {
+		for (const r of this.diffResolvers.splice(0, count)) r();
 	}
 	resolveDetails(): void {
 		for (const r of this.detailsResolvers.splice(0)) r();

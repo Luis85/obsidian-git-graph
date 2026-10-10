@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { countStatus, parseLog, parseNameStatus, parseRefs, parseShow, parseStatus } from '../../src/git/parse';
+import { countStatus, parseFollowLog, parseLog, parseNameStatus, parseRefs, parseShow, parseStatus } from '../../src/git/parse';
 
 const F = '\x1f';
 const Z = '\0';
@@ -15,6 +15,54 @@ describe('parseLog', () => {
 
 	it('returns [] for empty output', () => {
 		expect(parseLog('')).toEqual([]);
+	});
+});
+
+const header = (hash: string, subject: string): string => `${hash}${F}p${F}Ann${F}a@x${F}2026-09-06T10:00:00Z${F}${subject}`;
+
+// `git log -z --name-status --follow` writes each commit as its format record, then a NUL, a
+// newline, the status, and the NUL-terminated path(s) the file had in that commit.
+describe('parseFollowLog', () => {
+	it('attaches the file as it was in each commit, including a rename with its old path', () => {
+		const out = [header('c3', 'edit'), '\nM', 'renamed.md', header('c2', 'rename'), '\nR100', 'note.md', 'renamed.md', header('c1', 'root'), '\nA', 'note.md', ''].join(Z);
+		const commits = parseFollowLog(out, 'renamed.md');
+		expect(commits.map((c) => [c.hash, c.subject, c.file])).toEqual([
+			['c3', 'edit', { path: 'renamed.md', status: 'M' }],
+			['c2', 'rename', { path: 'renamed.md', status: 'R', oldPath: 'note.md' }],
+			['c1', 'root', { path: 'note.md', status: 'A' }],
+		]);
+		expect(commits[0]).toMatchObject({ parents: ['p'], author: 'Ann', email: 'a@x', date: '2026-09-06T10:00:00Z' });
+	});
+
+	it('leaves `file` off a commit that git listed without a name-status block', () => {
+		const out = [header('c2', 'merge'), header('c1', 'root'), '\nA', 'note.md', ''].join(Z);
+		const commits = parseFollowLog(out, 'note.md');
+		expect(commits[0]).not.toHaveProperty('file');
+		expect(commits[1]?.file).toEqual({ path: 'note.md', status: 'A' });
+	});
+
+	// The followed path is also a prefix pathspec: a commit that swapped a directory `Docs/` for a
+	// file `Docs` lists every entry under it, and only the first entry carries the newline.
+	it('reads every entry of a commit and attaches the one for the followed path', () => {
+		const out = [header('c2', 'swap'), '\nD', 'Docs/a.md', 'A', 'Docs', 'D', 'Docs/b.md', header('c1', 'root'), '\nA', 'Docs/a.md', 'A', 'Docs/b.md', ''].join(Z);
+		const commits = parseFollowLog(out, 'Docs');
+		expect(commits.map((c) => [c.hash, c.file])).toEqual([
+			['c2', { path: 'Docs', status: 'A' }],
+			['c1', { path: 'Docs/a.md', status: 'A' }],
+		]);
+	});
+
+	it('keeps following the path a rename came from, and reads a status git may add later as a modification', () => {
+		const out = [header('c3', 'rename'), '\nR090', 'b.md', 'c.md', header('c2', 'edit'), '\nM', 'c.md', 'X', 'b.md', header('c1', 'root'), '\nA', 'b.md', ''].join(Z);
+		expect(parseFollowLog(out, 'c.md').map((c) => c.file)).toEqual([
+			{ path: 'c.md', status: 'R', oldPath: 'b.md' },
+			{ path: 'b.md', status: 'M' },
+			{ path: 'b.md', status: 'A' },
+		]);
+	});
+
+	it('returns [] for empty output', () => {
+		expect(parseFollowLog('', 'a.md')).toEqual([]);
 	});
 });
 

@@ -141,9 +141,10 @@ some other server, for example a `harness:build` preview.
 
 - **The theme is an approximation.** Obsidian is not running, so `harness/theme.css` supplies
   stand-in values for the CSS variables the plugin's own styles read (`--background-*`, `--text-*`,
-  `--color-*`, `--size-*`, `--font-*`, `--radius-s`) plus base looks for `.clickable-icon`,
-  `.mod-cta` and `.dropdown`. They are close to Obsidian's defaults, but a harness screenshot
-  proves the layout and the states, not the exact colors a user will see.
+  `--interactive-*`, `--input-shadow`, `--color-*`, `--size-*`, `--font-*`, `--icon-xs`,
+  `--radius-s`) plus base looks for a plain `button` (the file-mode Newer/Older buttons),
+  `.clickable-icon`, `.mod-cta` and `.dropdown`. They are close to Obsidian's defaults, but a
+  harness screenshot proves the layout and the states, not the exact colors a user will see.
 - **`refs=auto|all` does not change which commits come back.** A fixture is a pre-baked commit
   list rather than a graph walk, so the parameter changes the header dropdown and what the
   store asks `log()` for, not the history. Use `branches` when you want many lanes.

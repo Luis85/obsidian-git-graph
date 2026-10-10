@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import GraphRoot from '../../src/view/GraphRoot.vue';
 import { DEFAULT_SETTINGS } from '../../src/settings/types';
 import { createEmitter } from '../../src/util/emitter';
+import { STEP_SETTLE_MS } from '../../src/view/expansion';
 import type { RepoState } from '../../src/view/repoState';
 import { FakeReader, commit, linear } from '../helpers/fakeReader';
 
@@ -263,5 +264,48 @@ describe('GraphRoot', () => {
 		await flushPromises();
 		await w.get('.git-graph-file-link').trigger('click');
 		expect(w.emitted('openFile')).toEqual([['notes/a.md']]);
+	});
+
+	it("shows the active file's diff for an expanded commit in file mode and steps to the older one", async () => {
+		const reader = new FakeReader();
+		reader.commits = linear(3);
+		const w = mountRoot({ kind: 'ready', root: 'C:/vault', reader }, createEmitter<void>(), createEmitter<void>(), 'notes/a.md');
+		await flushPromises();
+		await w.get('button.git-graph-history-toggle').trigger('click');
+		await flushPromises();
+		await w.findAll('.git-graph-row')[0]?.trigger('click');
+		reader.resolveDetails();
+		await flushPromises();
+		expect(reader.diffCalls).toEqual([{ hash: 'c1', file: { path: 'notes/a.md', status: 'M' } }]);
+		expect(w.get('.git-graph-diff-add').text()).toBe('+c1');
+		await w.get('.git-graph-step-older').trigger('click');
+		// A step asks git for the new commit's contents only once stepping pauses.
+		await new Promise((resolve) => window.setTimeout(resolve, STEP_SETTLE_MS));
+		reader.resolveDetails();
+		await flushPromises();
+		expect(w.get('.git-graph-row-expanded .git-graph-subject').text()).toBe('c2');
+		expect(w.get('.git-graph-diff-add').text()).toBe('+c2');
+		// Leaving file mode collapses the expansion; a commit opened in the graph lists its files.
+		await w.get('button.git-graph-history-toggle').trigger('click');
+		await flushPromises();
+		await w.findAll('.git-graph-row')[0]?.trigger('click');
+		reader.resolveDetails();
+		await flushPromises();
+		expect(w.find('.git-graph-diff').exists()).toBe(false);
+		expect(w.find('.git-graph-step').exists()).toBe(false);
+	});
+
+	it('shows the diff in file mode before the commit details arrive', async () => {
+		const reader = new FakeReader();
+		reader.commits = linear(2);
+		const w = mountRoot({ kind: 'ready', root: 'C:/vault', reader }, createEmitter<void>(), createEmitter<void>(), 'notes/a.md');
+		await flushPromises();
+		await w.get('button.git-graph-history-toggle').trigger('click');
+		await flushPromises();
+		await w.findAll('.git-graph-row')[0]?.trigger('click');
+		await flushPromises();
+		expect(w.get('.git-graph-details').text()).toContain('Loading commit');
+		expect(w.get('.git-graph-change-file .git-graph-file-path').text()).toBe('notes/a.md');
+		expect(w.get('.git-graph-diff-add').text()).toBe('+c1');
 	});
 });

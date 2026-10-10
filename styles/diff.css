@@ -1,0 +1,110 @@
+/* file mode: stepping between commits, and the followed file's diff in each */
+
+/* Sits at the very top of the expanded block, so it stays put while a click on it moves the
+   expansion one row on: CommitList keeps the expanded row at the same height in the viewport.
+   Sticky, so Newer/Older stay in reach while reading down a long diff; the opaque background
+   keeps the diff from showing through as it scrolls underneath. */
+.git-graph-step {
+	position: sticky;
+	top: 0;
+	z-index: 1;
+	display: flex;
+	gap: var(--size-4-2);
+	padding: var(--size-4-2) var(--size-4-3) var(--size-4-1) var(--size-4-4);
+	background: var(--background-secondary);
+}
+.git-graph-step button {
+	display: inline-flex;
+	align-items: center;
+	gap: var(--size-4-1);
+	height: auto;
+	padding: var(--size-2-1) var(--size-4-2);
+	font-size: var(--font-ui-smaller);
+}
+.git-graph-step button:disabled {
+	opacity: 0.5;
+	cursor: default;
+	box-shadow: none;
+}
+/* A finger needs a bigger target than the compact desktop buttons. */
+.is-mobile .git-graph-step button {
+	min-height: 36px;
+}
+.git-graph-step .git-graph-icon {
+	display: inline-flex;
+}
+.git-graph-step .git-graph-icon svg {
+	width: var(--icon-xs);
+	height: var(--icon-xs);
+}
+
+/* Continues the commit header above it (.git-graph-details-lead), as one block. */
+.git-graph-change {
+	padding: var(--size-4-1) var(--size-4-3) var(--size-4-3) var(--size-4-4);
+	background: var(--background-secondary);
+	border-bottom: 1px solid var(--background-modifier-border);
+	font-size: var(--font-ui-smaller);
+}
+
+/* The followed file, as the file list would show it. */
+.git-graph-change-file {
+	display: flex;
+	gap: var(--size-4-2);
+	align-items: baseline;
+	line-height: 1.6;
+	font-family: var(--font-monospace);
+	overflow: hidden;
+}
+
+.git-graph-change-notice {
+	color: var(--text-muted);
+	margin: var(--size-4-1) 0;
+}
+
+/* The pane is narrow: long lines scroll sideways inside the diff instead of wrapping, so a
+   line keeps the shape it has in the file. A grid, so every line is as wide as the widest and
+   the add/delete bands run the full width when scrolled sideways. */
+.git-graph-diff {
+	display: grid;
+	margin: var(--size-4-1) 0 var(--size-4-2);
+	padding: var(--size-4-1) 0;
+	overflow-x: auto;
+	background: var(--background-primary);
+	border-radius: var(--radius-s);
+	font-family: var(--font-monospace);
+	font-size: var(--font-ui-smaller);
+	line-height: 1.5;
+}
+.git-graph-diff:focus-visible {
+	outline: 2px solid var(--background-modifier-border-focus);
+	outline-offset: -2px;
+}
+.git-graph-diff-line {
+	min-height: 1.5em;
+	padding: 0 var(--size-4-2);
+	white-space: pre;
+	tab-size: 4;
+}
+.git-graph-diff-add {
+	background: color-mix(in srgb, var(--color-green) 16%, transparent);
+}
+.git-graph-diff-del {
+	background: color-mix(in srgb, var(--color-red) 16%, transparent);
+}
+.git-graph-diff-hunk {
+	color: var(--text-muted);
+	background: var(--background-modifier-hover);
+}
+.git-graph-diff-note {
+	color: var(--text-faint);
+	font-style: italic;
+}
+
+.git-graph-change-all summary {
+	cursor: pointer;
+	color: var(--text-muted);
+	margin-bottom: var(--size-4-1);
+}
+.git-graph-change-all summary:hover {
+	color: var(--text-normal);
+}

@@ -148,6 +148,22 @@ describe('log with a path', () => {
 		expect(commits.map((c) => c.hash)).toEqual([fixture.hashes.tip, fixture.hashes.second, fixture.hashes.root]);
 	});
 
+	// The path a commit knew the file by is what its diff has to be asked for: before the rename
+	// that is `note.md`, which no longer exists at HEAD.
+	it('records the file as each commit had it, rename included', async () => {
+		const commits = await repo.log({ skip: 0, count: 200, refs: 'all', path: 'renamed.md' });
+		expect(commits.map((c) => c.file)).toEqual([
+			{ path: 'renamed.md', status: 'R', oldPath: 'note.md' },
+			{ path: 'note.md', status: 'M' },
+			{ path: 'note.md', status: 'A' },
+		]);
+	});
+
+	it('leaves `file` off commits of the unfiltered log', async () => {
+		const commits = await repo.log({ skip: 0, count: 200, refs: 'all' });
+		expect(commits.every((c) => c.file === undefined)).toBe(true);
+	});
+
 	it('lists commits that touch a file added on a branch', async () => {
 		const commits = await repo.log({ skip: 0, count: 200, refs: 'all', path: 'feature.md' });
 		expect(commits.map((c) => c.hash)).toEqual([fixture.hashes.feature]);

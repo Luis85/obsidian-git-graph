@@ -146,7 +146,8 @@ export default defineConfig([
 		rules: {
 			// TODO(quality): createGraphStore has 106 lines (limit 80). Every status read now
 			// lives in ./statusSync (createStatusSync) and `errorMessage` in ./errors, and
-			// `toggleExpand` (createExpandToggler), `applyLoad` and `groupRefs` sit at module scope.
+			// the expansion (./expansion), `applyLoad`, `applyPage`, `trackLoads` and `groupRefs` sit
+			// at module scope.
 			// What remains inline is the initial `state` literal (one line per GraphState field)
 			// plus `visibleRows`/`collapse`/`load`/`loadMore`, which close over shared private
 			// state (state, byHash, generation, disposed) rather than forming one long

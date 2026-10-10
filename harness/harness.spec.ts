@@ -79,7 +79,7 @@ test('rows below the details keep their measured offset after collapsing and exp
 			const host = document.querySelector<HTMLElement>('.git-graph-details')?.parentElement ?? null;
 			const items = [...document.querySelectorAll<HTMLElement>('.git-graph-item')];
 			const at = items.findIndex((item) => host !== null && item.contains(host));
-			const [expandedY, nextY] = [items[at], items[at + 1]].map((el) => Number(/translateY\((-?\d+(?:\.\d+)?)px\)/.exec(el?.style.transform ?? '')?.[1] ?? NaN));
+			const [expandedY, nextY] = [items[at], items[at + 1]].map((el) => Number(/^(-?\d+(?:\.\d+)?)px$/.exec(el?.style.top ?? '')?.[1] ?? NaN));
 			return { hostHeight: host?.offsetHeight ?? 0, expandedY: expandedY ?? NaN, nextY: nextY ?? NaN };
 		});
 
@@ -230,6 +230,53 @@ test('history filters rows to only the commits touching the active file', async 
 	await expect(page.locator('svg.git-graph-lanes')).toHaveCount(0);
 	await expect(page.locator('.git-graph-history-file')).toHaveText('README.md');
 	await expect(page.locator('.git-graph-history-toggle')).toHaveAttribute('aria-pressed', 'true');
+});
+
+test('history shows the file diff of an expanded commit and steps through the commits', async ({ page }) => {
+	await open(page, 'scenario=long&file=README.md');
+	const rows = page.locator('.git-graph-row');
+	const second = await rows.nth(1).locator('.git-graph-subject').textContent();
+	await rows.first().click();
+	await expect(page.locator('.git-graph-diff-hunk')).toHaveCount(1);
+	// The diff follows the commit header as its sibling, and the header lists no files itself.
+	await expect(page.locator('.git-graph-details + .git-graph-change .git-graph-diff')).toHaveCount(1);
+	await expect(page.locator('.git-graph-details .git-graph-files')).toHaveCount(0);
+	await expect(page.locator('.git-graph-change-file .git-graph-file-path')).toHaveText(/README\.md/);
+	await expect(page.locator('.git-graph-step-newer')).toBeDisabled();
+	await expect(page.locator('.git-graph-step-older')).toHaveAttribute('aria-label', `Older commit: ${second ?? ''}`);
+	const top = (await page.locator('.git-graph-row-expanded').boundingBox())?.y;
+	await page.locator('.git-graph-step-older').click();
+	await expect(page.locator('.git-graph-row-expanded .git-graph-subject')).toHaveText(second ?? '');
+	// The stepped-to row takes the stepped-from row's place, and the Older button keeps focus.
+	expect((await page.locator('.git-graph-row-expanded').boundingBox())?.y).toBe(top);
+	await expect(page.locator('.git-graph-step-older')).toBeFocused();
+	await expect(page.locator('[aria-live="polite"]')).toHaveText(new RegExp(`^Older commit: .+, 2 of \\d+`));
+	// Scrolled into the diff, the step bar stays pinned to the top of the list.
+	const list = page.locator('.git-graph-list');
+	await list.evaluate((el) => el.scrollBy(0, 80));
+	await expect.poll(async () => (await page.locator('.git-graph-step').boundingBox())?.y).toBe((await list.boundingBox())?.y);
+	await page.locator('.git-graph-row-expanded').focus();
+	await page.keyboard.press('ArrowUp');
+	await expect(page.locator('.git-graph-step-newer')).toBeDisabled();
+	await expect(page.locator('.git-graph-diff')).toContainText('+');
+	// On a row that is not the expanded one, the arrows move focus and leave the expansion be.
+	const expanded = await page.locator('.git-graph-row-expanded').getAttribute('data-hash');
+	await rows.nth(3).focus();
+	await page.keyboard.press('ArrowDown');
+	await expect(rows.nth(4)).toBeFocused();
+	expect(await page.locator('.git-graph-row-expanded').getAttribute('data-hash')).toBe(expanded);
+});
+
+test('the arrow keys move focus between rows in the graph without opening them', async ({ page }) => {
+	await open(page, 'scenario=merge');
+	const rows = page.locator('.git-graph-row');
+	await rows.nth(1).focus();
+	await page.keyboard.press('ArrowDown');
+	await expect(rows.nth(2)).toBeFocused();
+	await page.keyboard.press('ArrowUp');
+	await page.keyboard.press('ArrowUp');
+	await expect(rows.nth(0)).toBeFocused();
+	await expect(page.locator('.git-graph-details')).toHaveCount(0);
 });
 
 test('history reports no commits for a file none of them touched', async ({ page }) => {

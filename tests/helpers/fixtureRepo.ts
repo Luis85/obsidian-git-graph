@@ -12,6 +12,14 @@ const FIXTURE_ENV = {
 	GIT_COMMITTER_DATE: '2026-09-01T10:00:00+02:00',
 };
 
+/**
+ * How tests delete a temp directory. On Windows a running process locks its working directory,
+ * and a git process the plugin started there (a floating `initRepo()` from `onload()`, say) can
+ * still be exiting when the test cleans up; `rmSync` then fails with EBUSY. `maxRetries` makes it
+ * retry EBUSY/EPERM with a linear backoff instead (CI saw this on windows-latest).
+ */
+export const REMOVE_TEMP = { recursive: true, force: true, maxRetries: 10, retryDelay: 100 } as const;
+
 export interface EmptyRepo {
 	dir: string;
 	git: (...args: string[]) => string;
@@ -24,7 +32,7 @@ export function createEmptyRepo(prefix = 'git-graph-tmp-'): EmptyRepo {
 	const git = (...args: string[]): string => execFileSync('git', args, { cwd: dir, encoding: 'utf8', env: { ...process.env, ...FIXTURE_ENV } }).trim();
 	git('init', '-q', '-b', 'main');
 	git('config', 'core.autocrlf', 'false');
-	return { dir, git, dispose: () => rmSync(dir, { recursive: true, force: true }) };
+	return { dir, git, dispose: () => rmSync(dir, REMOVE_TEMP) };
 }
 
 export interface FixtureRepo {
@@ -80,7 +88,7 @@ export function createFixtureRepo(): FixtureRepo {
 		hashes: { root, second, feature, merge, tip },
 		dispose: () => {
 			dispose();
-			rmSync(remote, { recursive: true, force: true });
+			rmSync(remote, REMOVE_TEMP);
 		},
 	};
 }

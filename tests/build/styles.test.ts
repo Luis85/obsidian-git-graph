@@ -76,6 +76,9 @@ describe('the assembled stylesheet', () => {
 		// Test and query handles on buttons whose appearance is Obsidian's clickable-icon.
 		'git-graph-copy',
 		'git-graph-refresh',
+		// Focus targets CommitList returns to after a step; styled together as `.git-graph-step button`.
+		'git-graph-step-newer',
+		'git-graph-step-older',
 	]);
 
 	it('defines every git-graph- class the components use, bar the deliberately unstyled', () => {
