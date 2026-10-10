@@ -23,6 +23,11 @@ See [RELEASING.md](RELEASING.md) for how this file is kept in step with a releas
 ### Added
 
 - In file history, an expanded commit shows that file's diff, and Newer/Older buttons or the arrow keys step through the file's commits.
+- The arrow keys move the focus between commit rows.
+
+### Fixed
+
+- A merge commit's file list shows only what changed against its first parent, not against every parent.
 
 ## [0.3.0] - 2026-09-07
 
