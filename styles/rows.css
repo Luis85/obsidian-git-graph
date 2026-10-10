@@ -10,12 +10,13 @@
 	position: relative;
 	width: 100%;
 }
+/* Placed by an inline `top`, not a transform: the file-mode step bar is sticky, and sticky
+   positioning works from layout offsets, which a transform does not move. */
 .git-graph-item {
 	position: absolute;
 	top: 0;
 	left: 0;
 	right: 0;
-	will-change: transform;
 }
 .git-graph-row {
 	display: flex;

@@ -31,22 +31,69 @@ describe('FileChange', () => {
 	});
 
 	it('shows loading, error, binary and empty states', () => {
+		expect(mountChange({ diff: { binary: true, truncated: false, lines: [] }, file: { path: 'b.md', status: 'C', oldPath: 'a.md' } }).text()).toContain('Binary file');
+		expect(mountChange({ diff: { binary: false, truncated: false, lines: [] }, file: { path: 'b.md', status: 'C', oldPath: 'a.md' } }).text()).toContain('Copied, content unchanged');
 		expect(mountChange({ diff: null }).text()).toContain('Loading changes');
 		expect(mountChange({ diff: null, error: 'fatal: bad object' }).get('.git-graph-details-error').text()).toBe('fatal: bad object');
 		expect(mountChange({ diff: { binary: true, truncated: false, lines: [] } }).text()).toContain('Binary file');
 		expect(mountChange({ diff: { binary: false, truncated: false, lines: [] } }).text()).toContain('No content changes');
 	});
 
-	it('names the earlier path of a rename, and says when it carried no content change', () => {
-		const w = mountChange({ file: { path: 'a.md', status: 'R', oldPath: 'old.md' }, diff: { binary: false, truncated: false, lines: [] } });
-		expect(w.get('.git-graph-change-rename').text()).toContain('old.md');
-		expect(w.text()).toContain('content unchanged');
-		expect(mountChange().find('.git-graph-change-rename').exists()).toBe(false);
+	it('heads the diff with the status and path, naming the earlier path of a rename or copy', () => {
+		const plain = mountChange().get('.git-graph-change-file');
+		expect(plain.get('.git-graph-file-status').classes()).toContain('git-graph-file-status-M');
+		expect(plain.get('.git-graph-file-path').text()).toBe('a.md');
+		const renamed = mountChange({ file: { path: 'a.md', status: 'R', oldPath: 'old.md' }, diff: { binary: false, truncated: false, lines: [] } });
+		const renamedPath = renamed.get('.git-graph-change-file .git-graph-file-path');
+		expect(renamedPath.text()).toMatch(/^a\.md ←.*old\.md$/);
+		expect(renamedPath.attributes('title')).toBe('Renamed from old.md');
+		expect(renamed.text()).toContain('Renamed, content unchanged');
+		const copied = mountChange({ file: { path: 'b.md', status: 'C', oldPath: 'a.md' } });
+		expect(copied.get('.git-graph-change-file .git-graph-file-path').attributes('title')).toBe('Copied from a.md');
+		expect(copied.get('.git-graph-change-file').text()).toContain('copied from');
 	});
 
-	it('says when the diff was cut short', () => {
-		expect(mountChange({ diff: { ...diff, truncated: true } }).text()).toContain('truncated');
-		expect(mountChange().text()).not.toContain('truncated');
+	it('says how much of a cut-short diff it shows', () => {
+		expect(mountChange({ diff: { ...diff, truncated: true } }).get('.git-graph-change-notice').text()).toBe('Showing the first 1,500 lines.');
+		expect(mountChange().find('.git-graph-change-notice').exists()).toBe(false);
+	});
+
+	// Long lines scroll sideways inside the box, so a keyboard user has to be able to reach it.
+	it('makes the diff a focusable region named after the file', () => {
+		const box = mountChange().get('.git-graph-diff');
+		expect(box.attributes('tabindex')).toBe('0');
+		expect(box.attributes('role')).toBe('region');
+		expect(box.attributes('aria-label')).toBe('Changes to a.md');
+	});
+
+	// A null file means nothing is followed in this commit, not a load still to come.
+	it('shows no diff and no loading state for a null file, but still lists the files', () => {
+		const w = mountChange({ file: null, diff: null });
+		expect(w.find('.git-graph-change-file').exists()).toBe(false);
+		expect(w.find('.git-graph-diff').exists()).toBe(false);
+		expect(w.text()).not.toContain('Loading changes');
+		expect(w.get('details.git-graph-change-all summary').text()).toBe('All files (2)');
+	});
+
+	// The diff loads on its own, so it can be there before the commit's file list is.
+	it('says the files are loading while the commit details are', () => {
+		const w = mountChange({ files: null });
+		expect(w.get('details.git-graph-change-all summary').text()).toBe('All files');
+		expect(w.get('details.git-graph-change-all').text()).toContain('Loading files…');
+		expect(w.find('.git-graph-diff').exists()).toBe(true);
+	});
+
+	it('leaves the file disclosure out when the commit details failed', () => {
+		expect(mountChange({ files: null, filesFailed: true }).find('details.git-graph-change-all').exists()).toBe(false);
+	});
+
+	it('opens the disclosure from allOpen and reports its toggles', async () => {
+		const w = mountChange({ allOpen: true });
+		const all = w.get('details.git-graph-change-all');
+		expect(all.attributes('open')).toBeDefined();
+		(all.element as HTMLDetailsElement).open = false;
+		await all.trigger('toggle');
+		expect(w.emitted('update:allOpen')).toEqual([[false]]);
 	});
 
 	it('keeps every file of the commit behind a closed disclosure that still opens them', async () => {

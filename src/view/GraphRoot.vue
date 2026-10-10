@@ -77,10 +77,14 @@ const historyEmpty = computed<string | null>(() => {
 	return 'No commits for this file yet.';
 });
 
-/** File mode's diff of the expanded commit, or null to leave the plain file list. */
+/**
+ * File mode's diff of the expanded commit, or null to leave the plain file list. Keyed on the
+ * store's history path rather than the toggle: the store only looks up a file to diff once it
+ * has a path, so a toggle that is on before then would leave the diff loading for good.
+ */
 const fileChange = computed(() => {
 	const s = store.value;
-	if (!historyActive.value || s === null) return null;
+	if (s === null || s.state.historyPath === null) return null;
 	return { file: s.state.expandedFile, diff: s.state.expandedDiff, error: s.state.diffError };
 });
 

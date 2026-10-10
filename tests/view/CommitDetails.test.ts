@@ -36,6 +36,13 @@ describe('CommitDetails', () => {
 		expect(files[1]?.text()).toContain('old.md');
 	});
 
+	// File mode shows the commit's files below the diff instead, so the header leaves them out.
+	it('leaves the file list out when hideFiles is set', () => {
+		const w = mount(CommitDetails, { props: { details, error: null, hideFiles: true } });
+		expect(w.find('pre.git-graph-details-body').exists()).toBe(true);
+		expect(w.find('.git-graph-files').exists()).toBe(false);
+	});
+
 	it('copies the hash to the clipboard', async () => {
 		const writeText = vi.fn(() => Promise.resolve());
 		Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });

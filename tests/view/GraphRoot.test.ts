@@ -294,4 +294,18 @@ describe('GraphRoot', () => {
 		expect(w.find('.git-graph-diff').exists()).toBe(false);
 		expect(w.find('.git-graph-step').exists()).toBe(false);
 	});
+
+	it('shows the diff in file mode before the commit details arrive', async () => {
+		const reader = new FakeReader();
+		reader.commits = linear(2);
+		const w = mountRoot({ kind: 'ready', root: 'C:/vault', reader }, createEmitter<void>(), createEmitter<void>(), 'notes/a.md');
+		await flushPromises();
+		await w.get('button.git-graph-history-toggle').trigger('click');
+		await flushPromises();
+		await w.findAll('.git-graph-row')[0]?.trigger('click');
+		await flushPromises();
+		expect(w.get('.git-graph-details').text()).toContain('Loading commit');
+		expect(w.get('.git-graph-change-file .git-graph-file-path').text()).toBe('notes/a.md');
+		expect(w.get('.git-graph-diff-add').text()).toBe('+c1');
+	});
 });

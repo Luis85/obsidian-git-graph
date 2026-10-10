@@ -45,14 +45,27 @@ describe('CommitRow', () => {
 		expect(w.emitted('toggle')).toHaveLength(2);
 	});
 
-	// Only file mode steps between commits; elsewhere the arrow keys keep their usual meaning.
-	it('emits step on ArrowDown/ArrowUp only when steppable', async () => {
+	// Only the expanded row in file mode steps the expansion; on any other row the arrow keys
+	// move focus along the list, which CommitList does since it knows the neighbouring rows.
+	it('emits step on ArrowDown/ArrowUp only when steppable and expanded, and move otherwise', async () => {
 		const plain = mountRow();
 		await plain.trigger('keydown', { key: 'ArrowDown' });
 		expect(plain.emitted('step')).toBeUndefined();
-		const w = mountRow({ steppable: true });
+		expect(plain.emitted('move')?.map(([step]) => step)).toEqual([1]);
+		const collapsed = mountRow({ steppable: true });
+		await collapsed.trigger('keydown', { key: 'ArrowUp' });
+		expect(collapsed.emitted('step')).toBeUndefined();
+		expect(collapsed.emitted('move')?.map(([step]) => step)).toEqual([-1]);
+		const w = mountRow({ steppable: true, expanded: true });
 		await w.trigger('keydown', { key: 'ArrowDown' });
 		await w.trigger('keydown', { key: 'ArrowUp' });
 		expect(w.emitted('step')).toEqual([[1], [-1]]);
+		expect(w.emitted('move')).toBeUndefined();
+	});
+
+	it('carries its hash, and announces the step keys in file mode', () => {
+		expect(mountRow().attributes('data-hash')).toBe(commit.hash);
+		expect(mountRow().attributes('aria-keyshortcuts')).toBeUndefined();
+		expect(mountRow({ steppable: true }).attributes('aria-keyshortcuts')).toBe('ArrowUp ArrowDown');
 	});
 });
