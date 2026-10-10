@@ -20,6 +20,8 @@ See [RELEASING.md](RELEASING.md) for how this file is kept in step with a releas
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-10-10
+
 ### Added
 
 - In file history, an expanded commit shows that file's diff, and Newer/Older buttons or the arrow keys step through the file's commits.
