@@ -1,35 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { MAX_DIFF_LINES, parseFileDiff, parseFollowLog } from '../../src/git/diff';
+import { MAX_DIFF_LINES, parseFileDiff } from '../../src/git/diff';
 
-const F = '\x1f';
-const Z = '\0';
-const header = (hash: string, subject: string): string => `${hash}${F}p${F}Ann${F}a@x${F}2026-09-06T10:00:00Z${F}${subject}`;
-
-// `git log -z --name-status --follow` writes each commit as its format record, then a NUL, a
-// newline, the status, and the NUL-terminated path(s) the file had in that commit.
-describe('parseFollowLog', () => {
-	it('attaches the file as it was in each commit, including a rename with its old path', () => {
-		const out = [header('c3', 'edit'), '\nM', 'renamed.md', header('c2', 'rename'), '\nR100', 'note.md', 'renamed.md', header('c1', 'root'), '\nA', 'note.md', ''].join(Z);
-		const commits = parseFollowLog(out);
-		expect(commits.map((c) => [c.hash, c.subject, c.file])).toEqual([
-			['c3', 'edit', { path: 'renamed.md', status: 'M' }],
-			['c2', 'rename', { path: 'renamed.md', status: 'R', oldPath: 'note.md' }],
-			['c1', 'root', { path: 'note.md', status: 'A' }],
-		]);
-		expect(commits[0]).toMatchObject({ parents: ['p'], author: 'Ann', email: 'a@x', date: '2026-09-06T10:00:00Z' });
-	});
-
-	it('leaves `file` off a commit that git listed without a name-status block', () => {
-		const out = [header('c2', 'merge'), header('c1', 'root'), '\nA', 'note.md', ''].join(Z);
-		const commits = parseFollowLog(out);
-		expect(commits[0]).not.toHaveProperty('file');
-		expect(commits[1]?.file).toEqual({ path: 'note.md', status: 'A' });
-	});
-
-	it('returns [] for empty output', () => {
-		expect(parseFollowLog('')).toEqual([]);
-	});
-});
+const A_MD = { path: 'a.md' };
+const texts = (out: string, file: { path: string; oldPath?: string }): string[] => parseFileDiff(out, file).lines.map((l) => l.text);
 
 describe('parseFileDiff', () => {
 	it('skips the file headers and classifies hunk, context, added, removed and note lines', () => {
@@ -45,7 +18,7 @@ describe('parseFileDiff', () => {
 			'\\ No newline at end of file',
 			'',
 		].join('\n');
-		expect(parseFileDiff(out)).toEqual({
+		expect(parseFileDiff(out, A_MD)).toEqual({
 			binary: false,
 			truncated: false,
 			lines: [
@@ -59,32 +32,73 @@ describe('parseFileDiff', () => {
 	});
 
 	it('keeps a removed line whose text starts with dashes, once inside a hunk', () => {
-		const out = ['--- a/a.md', '+++ b/a.md', '@@ -1 +1 @@', '--- a rule', '+++ plus', ''].join('\n');
-		expect(parseFileDiff(out).lines.slice(1)).toEqual([
+		const out = ['diff --git a/a.md b/a.md', '--- a/a.md', '+++ b/a.md', '@@ -1 +1 @@', '--- a rule', '+++ plus', ''].join('\n');
+		expect(parseFileDiff(out, A_MD).lines.slice(1)).toEqual([
 			{ kind: 'del', text: '--- a rule' },
 			{ kind: 'add', text: '+++ plus' },
 		]);
 	});
 
-	// `diff-tree -m` on a merge writes one section per parent; the first is the first parent's.
-	it('reads only the first file section', () => {
-		const out = ['diff --git a/a.md b/a.md', '@@ -1 +1 @@', '-x', '+y', 'diff --git a/a.md b/a.md', '@@ -1 +1 @@', '-q', '+r', ''].join('\n');
-		expect(parseFileDiff(out).lines.map((l) => l.text)).toEqual(['@@ -1 +1 @@', '-x', '+y']);
+	// A copy is asked for with its source named too, so the source's own edit in the same commit
+	// comes first in the output; only the section that writes the copy belongs to it.
+	it('reads the section that writes the file, not the copy source before it', () => {
+		const out = [
+			'diff --git a/a.md b/a.md',
+			'@@ -1 +1 @@',
+			'-x',
+			'+source edit',
+			'diff --git a/a.md b/c.md',
+			'similarity index 92%',
+			'copy from a.md',
+			'copy to c.md',
+			'@@ -1 +1 @@',
+			'-x',
+			'+copy edit',
+			'',
+		].join('\n');
+		expect(texts(out, { path: 'c.md', oldPath: 'a.md' })).toEqual(['@@ -1 +1 @@', '-x', '+copy edit']);
+	});
+
+	// A type change (symlink to file, say) is written as a deletion and an addition of one path.
+	it('reads every section of the file, resetting the hunk state at each one', () => {
+		const out = [
+			'diff --git a/s.md b/s.md',
+			'deleted file mode 120000',
+			'@@ -1 +0,0 @@',
+			'-target.md',
+			'\\ No newline at end of file',
+			'diff --git a/s.md b/s.md',
+			'new file mode 100644',
+			'--- /dev/null',
+			'+++ b/s.md',
+			'@@ -0,0 +1 @@',
+			'+now a file',
+			'',
+		].join('\n');
+		expect(texts(out, { path: 's.md' })).toEqual(['@@ -1 +0,0 @@', '-target.md', '\\ No newline at end of file', '@@ -0,0 +1 @@', '+now a file']);
+	});
+
+	it('matches a header git had to quote', () => {
+		const out = ['diff --git "a/say \\"hi\\"\\there.md" "b/say \\"hi\\"\\there.md"', '@@ -0,0 +1 @@', '+x', ''].join('\n');
+		expect(texts(out, { path: 'say "hi"\there.md' })).toEqual(['@@ -0,0 +1 @@', '+x']);
+		const control = ['diff --git "a/odd\\a\\001\\177.md" "b/odd\\a\\001\\177.md"', '@@ -0,0 +1 @@', '+y', ''].join('\n');
+		expect(texts(control, { path: 'odd\x07\x01\x7f.md' })).toEqual(['@@ -0,0 +1 @@', '+y']);
 	});
 
 	it('reports a binary file', () => {
 		const out = ['diff --git a/b.dat b/b.dat', 'new file mode 100644', 'Binary files /dev/null and b/b.dat differ', ''].join('\n');
-		expect(parseFileDiff(out)).toEqual({ binary: true, truncated: false, lines: [] });
+		expect(parseFileDiff(out, { path: 'b.dat' })).toEqual({ binary: true, truncated: false, lines: [] });
 	});
 
 	it('is empty for a rename without content changes, and for no output at all', () => {
-		expect(parseFileDiff('diff --git a/a.md b/b.md\nsimilarity index 100%\nrename from a.md\nrename to b.md\n')).toEqual({ binary: false, truncated: false, lines: [] });
-		expect(parseFileDiff('')).toEqual({ binary: false, truncated: false, lines: [] });
+		const rename = 'diff --git a/a.md b/b.md\nsimilarity index 100%\nrename from a.md\nrename to b.md\n';
+		expect(parseFileDiff(rename, { path: 'b.md', oldPath: 'a.md' })).toEqual({ binary: false, truncated: false, lines: [] });
+		expect(parseFileDiff('', A_MD)).toEqual({ binary: false, truncated: false, lines: [] });
 	});
 
 	it('caps a very large diff and says so', () => {
 		const body = Array.from({ length: MAX_DIFF_LINES + 10 }, (_, i) => `+line ${i}`);
-		const result = parseFileDiff(['@@ -0,0 +1 @@', ...body, ''].join('\n'));
+		const result = parseFileDiff(['diff --git a/a.md b/a.md', '@@ -0,0 +1 @@', ...body, ''].join('\n'), A_MD);
 		expect(result.truncated).toBe(true);
 		expect(result.lines).toHaveLength(MAX_DIFF_LINES);
 	});

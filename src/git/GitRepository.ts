@@ -1,8 +1,8 @@
 import { resolve } from 'node:path';
-import { diffPathspecs, parseFileDiff, parseFollowLog } from './diff';
+import { MAX_DIFF_BYTES, diffPathspecs, parseFileDiff } from './diff';
 import { GitError } from './GitError';
-import { LOG_FORMAT, REF_FORMAT, SHOW_FORMAT, countStatus, parseLog, parseNameStatus, parseRefs, parseShow, parseStatus } from './parse';
-import { runGit } from './runGit';
+import { LOG_FORMAT, REF_FORMAT, SHOW_FORMAT, countStatus, parseFollowLog, parseLog, parseNameStatus, parseRefs, parseShow, parseStatus } from './parse';
+import { runGit, runGitCapped } from './runGit';
 import type { ChangedFile, Commit, CommitDetails, FileDiff, GitReader, RefFilter, RefsSnapshot } from './types';
 
 export interface GitRepositoryOptions {
@@ -134,10 +134,29 @@ export class GitRepository implements GitReader {
 		return null;
 	}
 
-	/** `--name-status` records the file's path in each commit, which `fileDiff` needs once a rename lies between it and HEAD. */
+	/**
+	 * `--name-status` records the file's path in each commit, which `fileDiff` needs once a rename
+	 * lies between it and HEAD. That path has to be repository-relative to work as a `:(top,…)`
+	 * pathspec, but `diff.relative` (git >= 2.28) makes log print it relative to cwd — the vault,
+	 * for one nested in a larger repository — so it is switched off for this call. `-c` rather
+	 * than `--no-relative`, which needs 2.28 too; older git ignores the unknown key.
+	 */
 	private async runFollow(selection: string[], max: number, path: string): Promise<Commit[]> {
-		const out = await this.run(['log', '--topo-order', '-z', `--format=${LOG_FORMAT}`, '--name-status', `--max-count=${max}`, ...selection, '--follow', '--', `:(top,literal)${path}`]);
-		return parseFollowLog(out);
+		const out = await this.run([
+			'-c',
+			'diff.relative=false',
+			'log',
+			'--topo-order',
+			'-z',
+			`--format=${LOG_FORMAT}`,
+			'--name-status',
+			`--max-count=${max}`,
+			...selection,
+			'--follow',
+			'--',
+			`:(top,literal)${path}`,
+		]);
+		return parseFollowLog(out, path);
 	}
 
 	/**
@@ -201,21 +220,38 @@ export class GitRepository implements GitReader {
 	}
 
 	async commitDetails(hash: string): Promise<CommitDetails> {
-		const [showOut, filesOut] = await Promise.all([
-			this.run(['show', '--no-patch', `--format=${SHOW_FORMAT}`, hash, '--']),
-			this.run(['diff-tree', '--no-commit-id', '-r', '--name-status', '-z', '-M', '--root', '-m', '--first-parent', hash, '--']),
-		]);
+		const [showOut, trees] = await Promise.all([this.run(['show', '--no-patch', `--format=${SHOW_FORMAT}`, hash, '--']), this.againstFirstParent(hash)]);
+		const filesOut = await this.run(['diff-tree', '--no-commit-id', '-r', '--name-status', '-z', '-M', ...trees, '--']);
 		return { ...parseShow(showOut), files: parseNameStatus(filesOut) };
 	}
 
 	/**
-	 * `diff-tree` is plumbing, so user diff configuration (external drivers, textconv, colour)
-	 * cannot change its output. Naming both paths of a rename lets `-M` pair them into one
-	 * section; `--root` gives a root commit its additions, and a merge is read against its first
-	 * parent (the first of the sections `-m` writes), like `commitDetails`.
+	 * The `diff-tree` arguments that compare `hash` with its first parent: the parent and the
+	 * commit, or `--root` and the commit for a root commit, which then shows as all additions.
+	 * `-m --first-parent` does not do this — `-m` makes diff-tree diff a merge against every
+	 * parent, and `--first-parent` only limits a revision walk, which diff-tree never does (a
+	 * merge listed the files it differs in from its second parent too, verified against git
+	 * 2.48.1). `--diff-merges=first-parent` would, but needs git >= 2.31.
 	 */
-	async fileDiff(hash: string, file: ChangedFile): Promise<FileDiff> {
-		const out = await this.run(['diff-tree', '-p', '-M', '--root', '-m', '--first-parent', '--no-commit-id', hash, '--', ...diffPathspecs(file)]);
-		return parseFileDiff(out);
+	private async againstFirstParent(hash: string): Promise<string[]> {
+		const [, parent] = (await this.run(['rev-list', '--parents', '-n', '1', hash, '--'])).trim().split(' ');
+		return parent === undefined ? ['--root', hash] : [parent, hash];
+	}
+
+	/**
+	 * `diff-tree` is plumbing, so user diff configuration (external drivers, textconv, colour,
+	 * `a/`/`b/` prefixes) cannot change its output. Naming both paths of a rename or copy lets
+	 * them pair into one section; `--find-copies-harder` (implying `-C`) also pairs a copy whose
+	 * source the commit left unchanged — plain `-C` only considers sources modified in the same
+	 * commit, and a duplicated note leaves its source alone. `core.quotePath=false` keeps a
+	 * non-ASCII path verbatim in the section header `parseFileDiff` matches on, whatever the
+	 * user configured. Output past `MAX_DIFF_BYTES` is cut, at its last whole line, and flagged.
+	 */
+	async fileDiff(hash: string, file: Pick<ChangedFile, 'path' | 'oldPath'>): Promise<FileDiff> {
+		const trees = await this.againstFirstParent(hash);
+		const args = ['-c', 'core.quotePath=false', 'diff-tree', '-p', '--find-copies-harder', '--no-commit-id', ...trees, '--', ...diffPathspecs(file)];
+		const { stdout, truncated } = await runGitCapped(this.gitPath, this.cwd, args, MAX_DIFF_BYTES);
+		if (!truncated) return parseFileDiff(stdout, file);
+		return { ...parseFileDiff(stdout.slice(0, stdout.lastIndexOf('\n') + 1), file), truncated: true };
 	}
 }

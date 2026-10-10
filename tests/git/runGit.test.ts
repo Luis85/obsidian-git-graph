@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
 import { GitError } from '../../src/git/GitError';
-import { runGit } from '../../src/git/runGit';
+import { runGit, runGitCapped } from '../../src/git/runGit';
 
 const cwd = mkdtempSync(join(tmpdir(), 'git-graph-rungit-'));
 afterAll(() => rmSync(cwd, { recursive: true, force: true }));
@@ -53,5 +53,22 @@ describe('runGit', () => {
 		);
 		expect(err).toBeInstanceOf(GitError);
 		expect((err as GitError).stderr).toMatch(/2 MiB/);
+	});
+});
+
+describe('runGitCapped', () => {
+	it('returns output under the cap whole', async () => {
+		expect(await runGitCapped('node', cwd, ['-e', "process.stdout.write('x'.repeat(50))"], 100)).toEqual({ stdout: 'x'.repeat(50), truncated: false });
+	});
+
+	it('cuts output at the cap and says so instead of failing', async () => {
+		const out = await runGitCapped('node', cwd, ['-e', "process.stdout.write('x'.repeat(2000))"], 100);
+		expect(out).toEqual({ stdout: 'x'.repeat(100), truncated: true });
+	});
+
+	it('still fails on a non-zero exit', async () => {
+		const err = await runGitCapped('git', cwd, ['rev-parse', '--show-toplevel'], 100).catch((e: unknown) => e);
+		expect(err).toBeInstanceOf(GitError);
+		expect((err as GitError).code).toBe('EXIT');
 	});
 });

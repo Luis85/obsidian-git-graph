@@ -86,6 +86,9 @@ export interface GitReader {
 	status(): Promise<{ changed: number }>;
 	statusFiles(): Promise<ChangedFile[]>;
 	commitDetails(hash: string): Promise<CommitDetails>;
-	/** One file's changes in one commit, against its first parent (or nothing, for a root commit). */
-	fileDiff(hash: string, file: ChangedFile): Promise<FileDiff>;
+	/**
+	 * One file's changes in one commit, against its first parent (or all additions, for a root
+	 * commit). `oldPath` is the source of a rename or copy, which the diff is then taken from.
+	 */
+	fileDiff(hash: string, file: Pick<ChangedFile, 'path' | 'oldPath'>): Promise<FileDiff>;
 }

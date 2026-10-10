@@ -474,7 +474,8 @@ export function createScenarioReader(name: string): GitReader {
 			if (commit === undefined) return Promise.reject(new Error(`fatal: bad object ${hash}`));
 			return delay(f.detailsDelayMs ?? 0).then(() => detailsFor(commit));
 		},
-		fileDiff(hash, file) {
+		// The view hands over the full ChangedFile; the canned diff is shaped by its status.
+		fileDiff(hash, file: ChangedFile) {
 			const commit = byHash.get(hash);
 			if (commit === undefined) return Promise.reject(new Error(`fatal: bad object ${hash}`));
 			return delay(f.detailsDelayMs ?? 0).then(() => diffFor(commit, file));
