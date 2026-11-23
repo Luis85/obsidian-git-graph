@@ -20,6 +20,10 @@ See [RELEASING.md](RELEASING.md) for how this file is kept in step with a releas
 
 ## [Unreleased]
 
+### Changed
+
+- The commit graph's lane layout is now an independent implementation, no longer a port of the VS Code Git Graph extension's code; graphs look the same as before.
+
 ## [0.4.0] - 2026-10-10
 
 ### Added
