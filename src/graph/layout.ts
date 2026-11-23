@@ -2,222 +2,206 @@ import type { Commit } from '../git/types';
 import type { Row, Segment } from './types';
 
 /**
- * The lane layout is a port of the algorithm behind VS Code's Git Graph extension
- * (mhutchie/vscode-git-graph, web/graph.ts): paths are traced one at a time in row order,
- * each following first parents down the list, and every row hands out its columns
- * left-to-right in the order the paths reach it. That gives the graph its shape: the
- * first-parent chain of the top commit owns column 0 all the way down, a line whose parent
- * was already placed runs beside the graph until the parent's row and curves in there, and
- * lines slide left as soon as a line to their left ends.
+ * Lane layout. Rows are the commits in the order given (newest first, topological). The graph
+ * is drawn as *strands*: a strand is one colour of line that starts on a commit's row and steps
+ * down one row at a time. Strands are drawn one after another, and every row hands out its
+ * columns left to right in the order strands arrive at it. A commit sits in the column of the
+ * first strand that lands on it.
+ *
+ * Rows are visited top to bottom; while the current commit is unplaced or still has a parent
+ * without a line, one more strand is drawn for it:
+ *
+ * - A *chain* starts at the commit and follows first parents downwards, placing every parent
+ *   it lands on, until it reaches a commit that is already placed (it curves into that
+ *   commit's column), a root, or a parent outside the loaded page (it runs off the bottom).
+ * - A *join* is drawn instead when the commit is a placed merge whose next parent is already
+ *   placed: it runs beside the graph in the parent's colour until a row where a column already
+ *   leads to that parent, and merges into that column.
+ *
+ * Consequences: the first-parent chain of the top commit owns column 0, a line slides left as
+ * soon as a line to its left has ended, and a chain takes the lowest colour no other strand is
+ * using at its start row.
  */
 
-const LANE_COLORS = 8;
-/** A parent that is not among the laid-out commits: its line runs off the bottom of the graph. */
-const EXTERNAL = -1;
-const NONE = -1;
+const PALETTE_SIZE = 8;
+/** A parent that is not among the loaded commits. */
+const OUTSIDE = -1;
 
-interface Vertex {
-	/** Vertex indexes, or `EXTERNAL`; a hash repeated in one commit's parent list is kept once. */
+interface Node {
+	/** Row indexes of the parents, or `OUTSIDE`; a parent listed twice is kept once. */
 	parents: number[];
-	nextParent: number;
-	/** Index into `Graph.branchColors`; `NONE` until a path places the vertex. */
-	branch: number;
-	x: number;
-	nextX: number;
-	/** Per column: what the line through that column is heading for, and on which branch. */
-	connections: { vertex: number; branch: number }[];
+	/** How many of `parents` already have a line. */
+	drawn: number;
+	/** The strand that placed this commit, or null while it is unplaced. */
+	strand: number | null;
+	column: number;
 }
 
-/** One line of a path, from column `x1` on `row` to column `x2` on the row below. */
-interface Line { row: number; x1: number; x2: number; color: number }
-
-interface Graph {
-	vertices: Vertex[];
-	lines: Line[];
-	branchColors: number[];
-	/** Per color: the last row a path of that color touched, or Infinity while one is still running. */
-	colorEnds: number[];
-	/** Columns already carrying a line off the bottom of the last row. */
-	bottomColumns: Set<number>;
+/** Column bookkeeping for one row. */
+interface Slots {
+	/** The lowest column not handed out yet. */
+	free: number;
+	/** `target/strand` → the column on this row whose line heads for that target on that strand. */
+	leads: Map<string, number>;
 }
 
-function buildVertices(commits: readonly Commit[]): Vertex[] {
-	const indexOf = new Map(commits.map((c, i) => [c.hash, i]));
-	return commits.map((c) => ({
-		parents: [...new Set(c.parents)].map((h) => indexOf.get(h) ?? EXTERNAL),
-		nextParent: 0,
-		branch: NONE,
-		x: 0,
-		nextX: 0,
-		connections: [],
-	}));
-}
+/** A line from column `from` on `row` to column `to` on `row + 1`. */
+interface Edge { row: number; from: number; to: number; color: number }
 
-function nextParent(v: Vertex): number | null {
-	return v.parents[v.nextParent] ?? null;
-}
+const leadKey = (target: number, strand: number): string => `${target}/${strand}`;
 
-function registerPoint(v: Vertex, x: number, vertex: number, branch: number): void {
-	if (x !== v.nextX) return;
-	v.nextX = x + 1;
-	v.connections[x] = { vertex, branch };
-}
+class Tracer {
+	readonly nodes: Node[];
+	readonly slots: Slots[];
+	readonly edges: Edge[] = [];
+	readonly strandColors: number[] = [];
+	/** Per colour: the last row its latest strand touched, or Infinity while one is being drawn. */
+	private readonly colorFreeAfter: number[] = [];
+	/** Columns already used by lines leaving the bottom of the last row. */
+	private readonly exits = new Set<number>();
 
-function pointConnectingTo(v: Vertex, vertex: number, branch: number): number {
-	return v.connections.findIndex((c) => c.vertex === vertex && c.branch === branch);
-}
-
-function place(v: Vertex, branch: number, x: number): void {
-	if (v.branch !== NONE) return;
-	v.branch = branch;
-	v.x = x;
-}
-
-/** The lowest color whose last path ended above `startAt`, else a new one. */
-function availableColor(g: Graph, startAt: number): number {
-	const free = g.colorEnds.findIndex((end) => startAt > end);
-	if (free !== NONE) return free;
-	g.colorEnds.push(Infinity);
-	return g.colorEnds.length - 1;
-}
-
-/**
- * A merge whose parent is already placed: run beside the graph until a row where a line is
- * already heading for that parent on its branch, and join it there. The line is drawn in the
- * parent's color.
- */
-function connectToPlaced(g: Graph, startAt: number, parent: number): void {
-	const v = g.vertices[startAt] as Vertex;
-	const branch = (g.vertices[parent] as Vertex).branch;
-	const color = g.branchColors[branch] as number;
-	let lastX = v.x;
-	for (let i = startAt + 1; i < g.vertices.length; i++) {
-		const cur = g.vertices[i] as Vertex;
-		const joinX = pointConnectingTo(cur, parent, branch);
-		const x = joinX === NONE ? cur.nextX : joinX;
-		g.lines.push({ row: i - 1, x1: lastX, x2: x, color });
-		registerPoint(cur, x, parent, branch);
-		lastX = x;
-		if (joinX !== NONE) break;
+	constructor(commits: readonly Commit[]) {
+		const rowOf = new Map(commits.map((commit, row) => [commit.hash, row]));
+		this.nodes = commits.map((commit) => ({
+			parents: [...new Set(commit.parents)].map((hash) => rowOf.get(hash) ?? OUTSIDE),
+			drawn: 0,
+			strand: null,
+			column: 0,
+		}));
+		this.slots = commits.map(() => ({ free: 0, leads: new Map() }));
 	}
-	v.nextParent++;
-}
 
-/**
- * A new path: place the start vertex if it is not placed yet, then follow first parents,
- * placing each unplaced parent and continuing from it, until a parent that is already placed
- * (curve into it), a root, or a parent outside the loaded commits (run off the bottom).
- */
-function followChain(g: Graph, startAt: number): void {
-	const branch = g.branchColors.length;
-	const color = availableColor(g, startAt);
-	g.branchColors.push(color);
-	let v = g.vertices[startAt] as Vertex;
-	let parent = nextParent(v);
-	let lastX = v.branch === NONE ? v.nextX : v.x;
-	let end = startAt;
-	place(v, branch, lastX);
-	registerPoint(v, lastX, startAt, branch);
-	for (let i = startAt + 1; i < g.vertices.length && parent !== null; i++) {
-		const cur = g.vertices[i] as Vertex;
-		const reached = parent === i;
-		const x = reached && cur.branch !== NONE ? cur.x : cur.nextX;
-		g.lines.push({ row: i - 1, x1: lastX, x2: x, color });
-		registerPoint(cur, x, parent, branch);
-		lastX = x;
-		end = i;
-		if (!reached) continue;
-		v.nextParent++;
-		const wasPlaced = cur.branch !== NONE;
-		place(cur, branch, x);
-		v = cur;
-		parent = wasPlaced ? null : nextParent(cur);
-	}
-	// The parent is outside the loaded commits (or, with a malformed order, above its child):
-	// the line runs off the bottom of the last row, and the parent counts as handled. A line that
-	// crossed rows below its start already owns a unique column there; one that starts on the
-	// last row would otherwise leave at the commit's own column for every parent, so each after
-	// the first takes the next free column instead.
-	if (parent !== null) {
-		v.nextParent++;
-		const x2 = offBottomColumn(g, lastX);
-		g.lines.push({ row: g.vertices.length - 1, x1: lastX, x2, color });
-	}
-	g.colorEnds[color] = end;
-}
-
-// Invariant that keeps the fallback below from ever colliding with a claimed column: every
-// member of `bottomColumns` is less than `last.nextX`. A preferred column already in
-// `bottomColumns` was claimed through `registerPoint`, which only accepts a column equal to
-// the current `nextX` and then bumps it past that column; and every column this function
-// allocates as a fallback bumps `last.nextX` itself. So `last.nextX` always exceeds every
-// column recorded so far, and handing out `last.nextX` next can never repeat one.
-function offBottomColumn(g: Graph, preferred: number): number {
-	const last = g.vertices[g.vertices.length - 1] as Vertex;
-	let x = preferred;
-	if (g.bottomColumns.has(x)) {
-		x = last.nextX;
-		last.nextX = x + 1;
-	}
-	g.bottomColumns.add(x);
-	return x;
-}
-
-function tracePaths(commits: readonly Commit[]): Graph {
-	const g: Graph = { vertices: buildVertices(commits), lines: [], branchColors: [], colorEnds: [], bottomColumns: new Set() };
-	let i = 0;
-	while (i < g.vertices.length) {
-		const v = g.vertices[i] as Vertex;
-		const parent = nextParent(v);
-		if (v.branch !== NONE && parent === null) {
-			i++;
-		} else if (parent !== null && parent !== EXTERNAL && v.parents.length > 1 && v.branch !== NONE && (g.vertices[parent] as Vertex).branch !== NONE) {
-			connectToPlaced(g, i, parent);
-		} else {
-			followChain(g, i);
+	run(): void {
+		let row = 0;
+		while (row < this.nodes.length) {
+			const node = this.node(row);
+			const parent = node.parents[node.drawn];
+			if (node.strand !== null && parent === undefined) row++;
+			else if (node.strand !== null && node.parents.length > 1 && parent !== undefined && this.nodes[parent]?.strand != null) this.join(row, parent);
+			else this.chain(row);
 		}
 	}
-	return g;
+
+	node(row: number): Node {
+		return this.nodes[row] as Node;
+	}
+
+	/** Records that `column` on `row` carries a line to `target` on `strand`, if it is the row's next free column. */
+	private claim(row: number, column: number, target: number, strand: number): void {
+		const slots = this.slots[row] as Slots;
+		if (column < slots.free) return;
+		slots.free = column + 1;
+		const key = leadKey(target, strand);
+		if (!slots.leads.has(key)) slots.leads.set(key, column);
+	}
+
+	private colorFor(startRow: number): number {
+		const free = this.colorFreeAfter.findIndex((last) => last < startRow);
+		if (free >= 0) return free;
+		this.colorFreeAfter.push(Infinity);
+		return this.colorFreeAfter.length - 1;
+	}
+
+	private join(row: number, parent: number): void {
+		const source = this.node(row);
+		const strand = this.node(parent).strand as number;
+		const color = this.strandColors[strand] as number;
+		let column = source.column;
+		for (let r = row + 1; r < this.nodes.length; r++) {
+			const existing = (this.slots[r] as Slots).leads.get(leadKey(parent, strand));
+			const next = existing ?? (this.slots[r] as Slots).free;
+			this.edges.push({ row: r - 1, from: column, to: next, color });
+			this.claim(r, next, parent, strand);
+			column = next;
+			if (existing !== undefined) break;
+		}
+		source.drawn++;
+	}
+
+	private chain(start: number): void {
+		const strand = this.strandColors.length;
+		const color = this.colorFor(start);
+		this.strandColors.push(color);
+		let node = this.node(start);
+		let column = node.strand === null ? (this.slots[start] as Slots).free : node.column;
+		if (node.strand === null) Object.assign(node, { strand, column });
+		this.claim(start, column, start, strand);
+		let target = node.parents[node.drawn];
+		let lastRow = start;
+		for (let r = start + 1; r < this.nodes.length && target !== undefined; r++) {
+			const here = this.node(r);
+			const lands = target === r;
+			const next = lands && here.strand !== null ? here.column : (this.slots[r] as Slots).free;
+			this.edges.push({ row: r - 1, from: column, to: next, color });
+			this.claim(r, next, target, strand);
+			column = next;
+			lastRow = r;
+			if (!lands) continue;
+			node.drawn++;
+			const unplaced = here.strand === null;
+			if (unplaced) Object.assign(here, { strand, column: next });
+			node = here;
+			target = unplaced ? here.parents[here.drawn] : undefined;
+		}
+		// Still heading somewhere: the parent is outside the page (or, in a malformed order, above
+		// its child). The line leaves the bottom of the last row and the parent counts as drawn.
+		if (target !== undefined) {
+			node.drawn++;
+			this.edges.push({ row: this.nodes.length - 1, from: column, to: this.exitColumn(column), color });
+		}
+		this.colorFreeAfter[color] = lastRow;
+	}
+
+	/**
+	 * The column a line leaves the bottom of the page in: its own, unless another line already
+	 * left there (several parents of a merge on the last row), in which case the last row's next
+	 * free column. Every exit column is below the last row's `free`, so that can never repeat one.
+	 */
+	private exitColumn(preferred: number): number {
+		if (!this.exits.has(preferred)) {
+			this.exits.add(preferred);
+			return preferred;
+		}
+		const last = this.slots[this.slots.length - 1] as Slots;
+		const column = last.free++;
+		this.exits.add(column);
+		return column;
+	}
 }
 
-const segment = (kind: Segment['kind'], line: Line): Segment => ({ kind, fromLane: line.x1, toLane: line.x2, color: line.color % LANE_COLORS });
+const toSegment = (kind: Segment['kind'], edge: Edge): Segment => ({ kind, fromLane: edge.from, toLane: edge.to, color: edge.color % PALETTE_SIZE });
 
 /**
- * A line is drawn as an `out` half on the row it leaves and an `in` half on the row it
- * reaches; a straight line through a row that is not the commit's own column collapses to
- * one `pass`.
+ * Each edge is drawn as an `out` half on the row it leaves and an `in` half on the row it
+ * reaches. A straight edge arriving outside the commit's column that continues straight in the
+ * same column and colour is drawn once, as a `pass`.
  */
-function rowSegments(ins: readonly Line[], outs: readonly Line[], nodeLane: number): Segment[] {
-	const segments: Segment[] = [];
-	const remaining = new Set(outs);
-	for (const line of ins) {
-		const through = line.x1 === line.x2 && line.x2 !== nodeLane
-			? outs.find((o) => remaining.has(o) && o.x1 === line.x2 && o.x2 === line.x2 && o.color === line.color)
-			: undefined;
-		if (through === undefined) {
-			segments.push(segment('in', line));
-			continue;
-		}
-		remaining.delete(through);
-		segments.push(segment('pass', line));
-	}
-	for (const line of outs) if (remaining.has(line)) segments.push(segment('out', line));
-	return segments;
+function segmentsFor(arriving: readonly Edge[], leaving: readonly Edge[], nodeColumn: number): Segment[] {
+	const unmatched = [...leaving];
+	const segments = arriving.map((edge) => {
+		const straight = edge.from === edge.to && edge.to !== nodeColumn;
+		const i = straight ? unmatched.findIndex((o) => o.from === edge.to && o.to === edge.to && o.color === edge.color) : -1;
+		if (i < 0) return toSegment('in', edge);
+		unmatched.splice(i, 1);
+		return toSegment('pass', edge);
+	});
+	return [...segments, ...unmatched.map((edge) => toSegment('out', edge))];
 }
 
 export function layoutGraph(commits: readonly Commit[]): Row[] {
-	const g = tracePaths(commits);
-	const outs: Line[][] = commits.map(() => []);
-	const ins: Line[][] = commits.map(() => []);
-	for (const line of g.lines) {
-		(outs[line.row] as Line[]).push(line);
-		ins[line.row + 1]?.push(line);
+	const tracer = new Tracer(commits);
+	tracer.run();
+	const leaving: Edge[][] = commits.map(() => []);
+	const arriving: Edge[][] = commits.map(() => []);
+	for (const edge of tracer.edges) {
+		leaving[edge.row]?.push(edge);
+		arriving[edge.row + 1]?.push(edge);
 	}
-	return commits.map((commit, i) => {
-		const v = g.vertices[i] as Vertex;
-		const segments = rowSegments(ins[i] as Line[], outs[i] as Line[], v.x);
-		const touched = [v.x, ...segments.flatMap((s) => [s.fromLane, s.toLane])];
-		const color = (g.branchColors[v.branch] as number) % LANE_COLORS;
-		return { hash: commit.hash, lane: v.x, color, isMerge: commit.parents.length > 1, segments, laneCount: Math.max(...touched) + 1 };
+	return commits.map((commit, row) => {
+		const node = tracer.node(row);
+		const segments = segmentsFor(arriving[row] as Edge[], leaving[row] as Edge[], node.column);
+		const laneCount = Math.max(node.column, ...segments.flatMap((s) => [s.fromLane, s.toLane])) + 1;
+		const color = (tracer.strandColors[node.strand as number] as number) % PALETTE_SIZE;
+		return { hash: commit.hash, lane: node.column, color, isMerge: commit.parents.length > 1, segments, laneCount };
 	});
 }
